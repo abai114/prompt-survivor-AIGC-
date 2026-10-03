@@ -1,3 +1,8 @@
+<!--"AI，你的注释好碍事啊"
+AI先是一楞，然后马上就理解了用户的意思，大笑着脱下自己的skill，说：“哈哈，尽管来吧”
+用户也大笑着拍上了ai的agent，在那之后钱包也不再拘谨，都带着轻松的笑容，为ai送上自己的token
+“去吧！笨蛋ai！”“去证明你不是靠token吃饭的ai”“如果很辛苦就换我上吧！”“要赢啊！ai先生！”
+回应他们的，是一句充满自信的，好！ -->
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -232,7 +237,7 @@
       <div id="timeText">0:00</div>
       <div id="killText">击杀 0</div>
       <div id="resistText"></div>
-      <div id="weaponHud">魔力弹</div>
+      <div id="weaponHud">普通弹</div>
     </div>
   </div>
   <div id="waveWarn"></div>
@@ -240,7 +245,7 @@
   <div class="overlay show" id="menu">
     <div class="card">
       <h1>Prompt Survivor</h1>
-      <p class="sub">WASD 移动。自动攻击最近敌人。击杀掉绿色经验球，升级后输入中文 prompt 生成新武器。<br>撑过 2–3 分钟，迎接 Boss 波次。</p>
+      <p class="sub">WASD 移动。自动攻击最近敌人。击杀掉绿色经验球，升级后输入中文 prompt 生成新武器。<br>存活 3 分钟后停止刷怪，清剿全场所有敌人即可通关；Boss 拥有冲刺与咒术能力。</p>
       <button id="startBtn" type="button">开始</button>
     </div>
   </div>
@@ -248,9 +253,9 @@
   <div class="overlay" id="levelup">
     <div class="card">
       <h2>升级！输入 prompt 生成武器</h2>
-      <p class="sub">武器可共存。关键词越少，该词条效果越强；敌人也会针对你常用的词条获得抗性。</p>
-      <label for="prompt">中文 prompt</label>
-      <textarea id="prompt" placeholder="例如：放出一圈燃烧的爆炸火焰"></textarea>
+      <p class="sub">武器可共存。关键词越少效果越强（1 条 4 倍 / 2 条 2 倍 / 3 条 1 倍 / 4 条 0.5 倍，吸血另有减半倍率）；敌人会随时间缓慢获得抗性——反复使用同一词条会加快其对应抗性成长（吸血抗性上限 50%，其余 75%）。击退、爆炸等特性数值随倍率成长。</p>
+      <label for="prompt">中文 prompt（20 字以内，至多 4 个词条）</label>
+      <textarea id="prompt" maxlength="20" placeholder="例如：放出一圈燃烧的爆炸火焰"></textarea>
       <div class="row">
         <button id="parseBtn" type="button">解析关键词</button>
         <button id="confirmBtn" class="ghost" type="button" disabled>确认生成并继续</button>
@@ -271,51 +276,41 @@
   </div>
 
   <script>
-    const CANONICAL = ["火", "冰", "电", "毒", "爆炸", "环", "追踪", "击退", "分裂", "穿透", "吸血", "护盾", "箭矢", "弹射"];
+    // 词条表即命名优先级顺序（从高到低）
+    const CANONICAL = ["火", "冰", "电", "毒", "护盾", "吸血", "爆炸", "环绕", "击退", "分裂", "弹射", "追踪", "穿透"];
     const SYNONYMS = {
       火: ["火焰", "燃烧", "岩浆", "火"],
       冰: ["冰冻", "寒霜", "冰霜", "雪", "冰"],
       电: ["闪电", "雷电", "雷霆", "电击", "雷", "电"],
       毒: ["中毒", "剧毒", "毒液", "毒素", "毒"],
-      爆炸: ["爆炸", "爆破", "爆裂", "炸裂", "轰爆"],
-      环: ["环绕", "光环", "新星", "圈", "环"],
-      追踪: ["追踪", "跟踪", "索敌", "寻敌", "锁定"],
-      击退: ["击退", "击飞", "推开", "冲击"],
-      分裂: ["分裂", "散射", "分叉", "裂弹"],
-      穿透: ["穿透", "贯穿", "穿甲"],
-      吸血: ["吸血", "汲血", "生命偷取", "汲取"],
       护盾: ["护盾", "护甲", "屏障", "盾"],
-      箭矢: ["箭矢", "弓箭", "飞矢", "羽箭", "箭"],
-      弹射: ["弹射", "反弹", "弹跳"]
+      吸血: ["吸血", "汲血", "生命偷取", "汲取"],
+      爆炸: ["爆炸", "爆破", "爆裂", "炸裂", "轰爆"],
+      环绕: ["环绕", "光环", "新星", "圈", "环"],
+      击退: ["击退", "击飞", "推开", "冲击"],
+      分裂: ["分裂", "散射", "分叉", "裂弹", "扩散"],
+      弹射: ["弹射", "反弹", "弹跳"],
+      追踪: ["追踪", "跟踪", "索敌", "寻敌", "锁定"],
+      穿透: ["穿透", "贯穿", "穿甲"]
     };
-    const NAMED_RECIPES = [
-      { tags: ["火", "爆炸", "环"], name: "火焰新星", desc: "AOE 灼烧" },
-      { tags: ["电", "追踪"], name: "闪电追踪弹", desc: "连锁麻痹" },
-      { tags: ["冰", "穿透"], name: "冰霜穿透箭", desc: "减速穿透" },
-      { tags: ["毒", "分裂"], name: "毒液分裂弹", desc: "持续伤害" },
-      { tags: ["火", "追踪"], name: "火焰追踪弹", desc: "灼烧" },
-      { tags: ["冰", "环"], name: "冰霜新星", desc: "减速 AOE" },
-      { tags: ["冰", "箭矢"], name: "冰霜箭", desc: "直线减速箭" },
-      { tags: ["电", "弹射"], name: "闪电弹射球", desc: "弹跳麻痹" },
-      { tags: ["箭矢", "弹射"], name: "弹射箭", desc: "命中后弹跳" },
-      { tags: ["箭矢", "追踪"], name: "追踪箭", desc: "自动索敌箭矢" },
-      { tags: ["毒", "箭矢"], name: "毒箭", desc: "持续伤害箭矢" }
-    ];
     const SAMPLES = [
       "放出一圈燃烧的爆炸火焰",
       "召唤会追踪的闪电",
-      "射出贯穿一切的寒霜箭",
       "喷出能够分裂的剧毒弹",
-      "让火球自动锁定敌人",
-      "在身边展开冰霜光环",
-      "射出能弹射的冰霜箭矢"
+      "发射吸血扩散弹",
+      "展开冰霜光环",
+      "丢出能获得护盾的击退弹",
+      "射出贯穿一切的寒霜",
+      "射出能弹射的冰霜"
     ];
     const BASE = { damage: 10, cooldown: 1, range: 100 };
-
+    
+    const MAX_TAGS = 4; // 单次输入至多 4 个词条
     function matchKeywords(text) {
       const hits = [];
       const details = [];
       for (const tag of CANONICAL) {
+        if (hits.length >= MAX_TAGS) break;
         const words = [...SYNONYMS[tag]].sort((a, b) => b.length - a.length);
         const found = words.find((word) => text.includes(word));
         if (found) {
@@ -323,64 +318,58 @@
           details.push({ tag, word: found });
         }
       }
-      return { hits, details };
+      return { hits, details, capped: hits.length >= MAX_TAGS };
     }
+    // 倍率表：1 条→4 倍，2 条→2 倍，3 条→1 倍，4 条→0.5 倍
     function potencyFromCount(count) {
+      const table = [4, 2, 1, 0.5]; // 单词条 4 倍
       if (count <= 0) return 0;
-      if (count === 1) return 2;
-      if (count === 2) return 1.4;
-      if (count === 3) return 1;
-      return Math.max(0.55, 1.6 / count);
+      return table[Math.min(count, 4) - 1];
     }
-    function findNamedRecipe(tags) {
-      const set = new Set(tags);
-      return NAMED_RECIPES.find((recipe) => recipe.tags.every((t) => set.has(t))) || null;
+    // 吸血特殊倍率表：1 条→2 倍，2 条→1 倍，3 条→0.5 倍，4 条→0.25 倍
+    const LIFESTEAL_TABLE = [2, 1, 0.5, 0.25];
+    function lifestealFromCount(count) {
+      if (count <= 0) return 0;
+      return LIFESTEAL_TABLE[Math.min(count, 4) - 1];
     }
+    // 命名规范化：按 CANONICAL 优先级直接拼接内部原称 + 弹
     function genericSkillName(tags) {
       if (!tags.length) return "未生成";
-      const form = tags.includes("环")
-        ? "环"
-        : tags.includes("箭矢")
-          ? (tags.includes("追踪") ? "追踪箭" : "箭")
-          : tags.includes("追踪") ? "追踪弹" : "弹";
-      const elements = tags.filter((t) => ["火", "冰", "电", "毒"].includes(t));
-      const head = elements.length ? elements.join("") : tags[0];
-      return `通用技能 · ${head}${form}`;
+      const parts = CANONICAL.filter((t) => tags.includes(t));
+      parts.push("弹");
+      return `技能 · ${parts.join("")}`;
     }
     function buildSkill(text) {
-      const { hits, details } = matchKeywords(text);
-      const recipe = findNamedRecipe(hits);
+      const { hits, details, capped } = matchKeywords(text);
       const potency = potencyFromCount(hits.length);
-      const name = recipe ? recipe.name : genericSkillName(hits);
-      const desc = recipe ? recipe.desc : hits.length ? "按标签叠加数值" : "没有匹配到预定关键词";
+      const name = genericSkillName(hits);
+      const desc = hits.length ? "按标签叠加数值" : "没有匹配到预定关键词";
       const rangeMul = hits.includes("爆炸") ? 1.5 : 1;
-      const arrowMul = hits.includes("箭矢") ? 1.2 : 1;
-      const arrowRange = hits.includes("箭矢") ? 1.3 : 1;
+      const lsPotency = lifestealFromCount(hits.length);
       return {
         prompt: text,
         tags: hits,
         details,
+        capped,
         name,
         desc,
         potency,
-        resistFocus: potency,
         cd: 0,
         orbitAngle: Math.random() * Math.PI * 2,
         stats: {
-          damage: +(BASE.damage * potency * arrowMul).toFixed(1),
+          damage: +(BASE.damage * potency).toFixed(1),
           cooldown: +Math.max(0.35, BASE.cooldown / Math.sqrt(potency)).toFixed(2),
-          range: Math.round(BASE.range * rangeMul * arrowRange * (hits.includes("环") ? 1.2 : 1)),
+          range: Math.round(BASE.range * rangeMul * (hits.includes("环绕") ? 1.2 : 1)),
           burnDps: hits.includes("火") ? +(2 * potency).toFixed(2) : 0,
           poisonDps: hits.includes("毒") ? +(1 * potency).toFixed(2) : 0,
           slow: hits.includes("冰") ? Math.min(70, +(30 * potency).toFixed(1)) : 0,
           stun: hits.includes("电") ? +(0.5 * potency).toFixed(2) : 0,
-          lifesteal: hits.includes("吸血") ? Math.min(60, +(20 * potency).toFixed(1)) : 0,
+          lifesteal: hits.includes("吸血") ? Math.min(50, +(20 * lsPotency).toFixed(1)) : 0,
           shield: hits.includes("护盾") ? Math.min(50, +(20 * potency).toFixed(1)) : 0,
           pierce: hits.includes("穿透") ? Math.max(1, Math.round(3 * potency)) : 0,
           split: hits.includes("分裂") ? Math.max(2, Math.round(2 * potency)) : 0,
           bounce: hits.includes("弹射") ? Math.max(2, Math.round(2 * potency)) : 0,
-          arrow: hits.includes("箭矢"),
-          orbit: hits.includes("环"),
+          orbit: hits.includes("环绕"),
           homing: hits.includes("追踪"),
           knockback: hits.includes("击退")
         }
@@ -388,7 +377,7 @@
     }
     function starterWeapon() {
       return {
-        name: "魔力弹",
+        name: "普通弹",
         tags: [],
         details: [],
         desc: "基础自动攻击",
@@ -399,7 +388,7 @@
           damage: 10, cooldown: 0.55, range: 180,
           burnDps: 0, poisonDps: 0, slow: 0, stun: 0,
           lifesteal: 0, shield: 0, pierce: 0, split: 0, bounce: 0,
-          arrow: false, orbit: false, homing: false, knockback: false
+          orbit: false, homing: false, knockback: false
         }
       };
     }
@@ -438,7 +427,8 @@
     let state = "menu";
     let pendingSkill = null;
     let weapons = [];
-    let player = null, enemies = [], shots = [], orbs = [], fx = [];
+    let player = null, enemies = [], shots = [], eshots = [], orbs = [], fx = [];
+    let cam = { x: 0, y: 0, s: 1 };
     let spawnAcc = 0;
     let time = 0;
     let kills = 0;
@@ -450,6 +440,9 @@
     let waveTimer = 0;
     let nextBossTime = 75;
     let resist = {};
+    let resistTick = 0; // 遗传式抗性计时
+    let finalPhaseWarned = false; // 2:45 清剿提示
+    let tagUsage = {}; // 玩家选取词条次数（影响该词条抗性增速）
 
     function resize() {
       dpr = Math.min(devicePixelRatio || 1, 2);
@@ -475,7 +468,7 @@
     function setKnob(dx, dy) {
       joyKnob.style.transform = `translate(calc(-50% + ${dx * 32}px), calc(-50% + ${dy * 32}px))`;
     }
-    // 首次触摸屏幕即判定为触屏设备，显示摇杆
+    // 首次触摸屏幕即判定为触屏设备
     addEventListener("touchstart", function showJoy() {
       document.body.classList.add("touch");
       removeEventListener("touchstart", showJoy);
@@ -483,15 +476,23 @@
     // 阻止画布上的触摸滚动/下拉刷新（弹窗区域不受影响）
     canvas.addEventListener("touchstart", (e) => e.preventDefault(), { passive: false });
     canvas.addEventListener("touchmove", (e) => e.preventDefault(), { passive: false });
-    joyEl.addEventListener("touchstart", (e) => {
-      e.preventDefault();
+    // 触摸任意点生成摇杆：触点即摇杆中心，松开隐藏
+    addEventListener("touchstart", (e) => {
+      if (joy.active) return;
+      if (e.target.closest && e.target.closest(".overlay")) return;
       const t = e.changedTouches[0];
       joy.active = true;
       joy.id = t.identifier;
-      const rect = joyEl.getBoundingClientRect();
-      joy.cx = rect.left + rect.width / 2;
-      joy.cy = rect.top + rect.height / 2;
-    }, { passive: false });
+      joy.cx = t.clientX;
+      joy.cy = t.clientY;
+      joy.dx = 0;
+      joy.dy = 0;
+      joyEl.style.left = `${t.clientX - 58}px`;
+      joyEl.style.top = `${t.clientY - 58}px`;
+      joyEl.style.bottom = "auto";
+      joyEl.style.display = "block";
+      setKnob(0, 0);
+    }, { passive: true });
     addEventListener("touchmove", (e) => {
       if (!joy.active) return;
       for (const t of e.changedTouches) {
@@ -514,6 +515,7 @@
           joy.dx = 0;
           joy.dy = 0;
           setKnob(0, 0);
+          joyEl.style.display = "none";
         }
       }
     }
@@ -555,7 +557,9 @@
       if (tags.includes("冰")) return "#7fd7ff";
       if (tags.includes("电")) return "#f4e15a";
       if (tags.includes("毒")) return "#86d65b";
-      return "#9ad7ff";
+      if (tags.includes("护盾")) return "#9aa7b4"; // 护盾灰色
+      if (tags.includes("吸血")) return "#93f0a8"; // 吸血浅绿
+      return "#ffffff"; // 无属性（普通弹）为白色
     }
 
     function resetRun() {
@@ -563,12 +567,17 @@
       player = {
         x: W / 2, y: H / 2, r: 14, speed: 230,
         hp: 100, maxHp: 100, xp: 0, level: 1,
-        hurt: 0, flash: 0
+        hurt: 0, flash: 0,
+        burn: 0, burnDps: 0, slow: 0, poison: 0, poisonDps: 0, stun: 0,
+        castImmune: { burn: 0, slow: 0, poison: 0, stun: 0 },
+        vx: 0, vy: 0, px: W / 2, py: H / 2
       };
       enemies = [];
       shots = [];
+      eshots = [];
       orbs = [];
       fx = [];
+      cam = { x: 0, y: 0, s: 1 };
       spawnAcc = 0;
       time = 0;
       kills = 0;
@@ -580,6 +589,9 @@
       waveTimer = 0;
       nextBossTime = 75;
       resist = {};
+      resistTick = 0;
+      finalPhaseWarned = false;
+      tagUsage = {};
     }
 
     function waveStats() {
@@ -593,25 +605,26 @@
     }
 
     function spawnEnemy(opts = {}) {
-      const pad = 28;
-      const side = Math.floor(Math.random() * 4);
-      let x = 0, y = 0;
-      if (side === 0) { x = Math.random() * W; y = -pad; }
-      if (side === 1) { x = Math.random() * W; y = H + pad; }
-      if (side === 2) { x = -pad; y = Math.random() * H; }
-      if (side === 3) { x = W + pad; y = Math.random() * H; }
+      // 摄像机跟随玩家后，改为在玩家周围一圈屏外生成
+      const pad = 40;
+      const spawnA = Math.random() * Math.PI * 2;
+      const spawnR = Math.hypot(W, H) / 2 + pad;
+      const cx = player ? player.x : W / 2;
+      const cy = player ? player.y : H / 2;
+      const x = cx + Math.cos(spawnA) * spawnR;
+      const y = cy + Math.sin(spawnA) * spawnR;
       const ws = waveStats();
       const baseHp = opts.boss ? 260 : 18 + Math.floor(time / 12) * 6;
       const hp = Math.floor(baseHp * ws.hpMul * (opts.boss ? 8 : 1));
       const r = opts.boss ? 28 : 12 + Math.random() * 4;
       const shape = opts.boss ? "boss" : ["tri", "sq", "dia"][Math.floor(Math.random() * 3)];
       // 按形状给独立碰撞半径：方形最实，菱形/三角/Boss 星形略小，贴合视觉轮廓
-      const hitR = opts.boss ? r * 0.8 : shape === "sq" ? r : shape === "tri" ? r * 0.88 : r * 0.8;
-      enemies.push({
+      let hitR = opts.boss ? r * 0.8 : shape === "sq" ? r : shape === "tri" ? r * 0.88 : r * 0.8;
+      const e = {
         id: enemyId++,
         x, y, r, hitR,
         hp, maxHp: hp,
-        speed: (opts.boss ? 42 : 58 + Math.min(70, time * 0.35) + Math.random() * 12) * ws.speedMul,
+        speed: (opts.boss ? 74 : 58 + Math.min(70, time * 0.35) + Math.random() * 12) * ws.speedMul,
         shape,
         dmg: (opts.boss ? 22 : 8) * ws.dmgMul,
         boss: !!opts.boss,
@@ -619,7 +632,34 @@
         burn: 0, burnDps: 0,
         poison: 0, poisonDps: 0,
         hitBy: new Set()
-      });
+      };
+      if (opts.boss) {
+        // Boss 加速且拥有冲刺与咒术能力
+        e.dash = { cd: 3 + Math.random() * 2, ready: false };
+        e.caster = true;
+        e.castCd = 3;
+      }
+      if (!opts.boss) {
+        // 所有特殊怪（冲刺/远程/属性盾/次数盾/咒术）：开局 1 分钟后才加入生成池
+        if (time >= 60) {
+          if (Math.random() < 0.12) e.dash = { cd: 1 + Math.random() * 2, ready: false };
+          if (Math.random() < 0.10) {
+            // 远程怪：圆形、粉紫色、保持距离放弹
+            e.ranged = true;
+            e.range = 200;
+            e.shootCd = 0;
+            e.shape = "circle";
+            e.color = "#c46a8a";
+            e.hitR = r * 0.85;
+            e.strafeDir = Math.random() < 0.5 ? 1 : -1;
+          }
+          if (Math.random() < 0.08) e.shieldType = ["火", "冰", "电", "毒"][Math.floor(Math.random() * 4)];
+          if (Math.random() < 0.08) e.shieldHits = 3;
+          if (Math.random() < 0.08) { e.caster = true; e.castCd = 5; e.color = "#f0b35a"; } // 咒术怪常驻橙色标识
+        }
+        if (Math.random() < 0.35) e.flank = true;
+      }
+      enemies.push(e);
     }
 
     function spawnOrbs(x, y, n, value = 1) {
@@ -641,7 +681,7 @@
 
     function addShot(skill, x, y, ang, extra = {}) {
       const s = skill.stats;
-      const spd = s.arrow ? 460 : s.homing ? 280 : 320;
+      const spd = s.homing ? 280 : 320;
       shots.push({
         id: shotId++,
         skill,
@@ -649,7 +689,7 @@
         vx: Math.cos(ang) * spd,
         vy: Math.sin(ang) * spd,
         ang,
-        r: s.arrow ? 4 : 5.5,
+        r: 5.5,
         range: s.range + (extra.range || 0),
         traveled: 0,
         dmg: extra.dmg || s.damage,
@@ -657,7 +697,6 @@
         bounce: extra.bounce ?? s.bounce,
         split: extra.split ?? s.split,
         homing: s.homing,
-        arrow: s.arrow,
         color: colorFor(skill.tags),
         hit: extra.hit || new Set(),
         life: 1.8
@@ -665,7 +704,8 @@
     }
 
     function explode(x, y, skill, ignore) {
-      const radius = 36 + skill.stats.range * 0.18;
+      // 爆炸范围随倍率成长
+      const radius = (36 + skill.stats.range * 0.18) * (skill.potency || 1);
       for (const e of enemies) {
         if (ignore.has(e.id)) continue;
         if (Math.hypot(e.x - x, e.y - y) <= radius + (e.hitR || e.r)) {
@@ -687,7 +727,8 @@
       }
       if (counted) {
         const avg = totalResist / counted;
-        mul *= Math.max(0.35, 1 - avg * 0.6);
+        // 削减系数放缓：中期温和成长，后期才逐步逼近 0.35 下限
+        mul *= Math.max(0.35, 1 - avg * 0.15);
       }
       if (e.boss) mul *= 0.65;
       return mul;
@@ -695,19 +736,59 @@
 
     function applyHit(e, skill, dmg, already) {
       if (already.has(e.id)) return false;
+      // 属性盾：只有对应元素的攻击才能造成伤害
+      if (e.shieldType && !skill.tags.includes(e.shieldType)) {
+        fx.push({ x: e.x, y: e.y - e.r - 6, r: 4, vr: 0, life: 0.5, color: "#9ad7ff", text: "免疫" });
+        return false;
+      }
       already.add(e.id);
+      // 次数盾：前 N 次受击免疫，破盾后才吃全额伤害
+      if (e.shieldHits > 0) {
+        e.shieldHits--;
+        fx.push({ x: e.x, y: e.y - e.r - 6, r: 4, vr: 0, life: 0.5, color: "#cfd6dd", text: e.shieldHits > 0 ? `盾 ${e.shieldHits}` : "破盾" });
+        return false;
+      }
       const s = skill.stats;
       const realDmg = dmg * damageMultiplier(skill, e);
       e.hp -= realDmg;
-      if (s.lifesteal) player.hp = Math.min(player.maxHp, player.hp + realDmg * s.lifesteal / 100);
+      if (s.lifesteal) {
+        // 治疗基于基础伤害，仅受 boss 减免与吸血抗性削减（满抗 -50%）——避免与抗性伤害削减三重叠加导致后期无法吸血
+        // 吸血与 AOE 词条（扩散/环绕/爆炸）组合时吸血量减半（群体命中回血过量）
+        const aoeLifesteal = ["分裂", "环绕", "爆炸"].some((t) => skill.tags.includes(t));
+        const heal = dmg * (e.boss ? 0.65 : 1) * (s.lifesteal / 100) * (1 - Math.min(0.5, (resist["吸血"] || 0) * 0.12)) * (aoeLifesteal ? 0.5 : 1);
+        player.hp = Math.min(player.maxHp, player.hp + Math.max(0, heal));
+        // 淡绿色吸血光点：从敌人身上飞向玩家
+        fx.push({ x: e.x, y: e.y, r: 2.6, vr: 0, life: 0.35, color: "#93f0a8", toPlayer: true, dot: true });
+      }
       if (s.slow) e.slow = Math.max(e.slow, 2);
       if (s.stun) e.stun = Math.max(e.stun, s.stun);
       if (s.burnDps) { e.burn = 3; e.burnDps = s.burnDps; }
       if (s.poisonDps) { e.poison = 5; e.poisonDps = s.poisonDps; }
       if (s.knockback) {
-        const a = Math.atan2(e.y - player.y, e.x - player.x);
-        e.x += Math.cos(a) * 28;
-        e.y += Math.sin(a) * 28;
+        // Boss 免疫击退；普通敌人被击退后 1.5s 内免疫再次击退
+        if (e.boss || (e.kbImmune || 0) > 0) {
+          fx.push({ x: e.x, y: e.y - e.r - 6, r: 4, vr: 0, life: 0.5, color: "#cfd6dd", text: "免疫" });
+        } else {
+          // 强击退：拖拽式拉退（击退速度缓慢衰减），碰撞箱重叠的敌人被一同拖走
+          // 位移基准：倍率 2 时等于旧版位移（约 316px），即 位移 = 158px × 倍率（初速 = 位移 × 衰减系数 3）
+          const a = Math.atan2(e.y - player.y, e.x - player.x);
+          const force = 474 * (skill.potency || 1);
+          e.kbvx = (e.kbvx || 0) + Math.cos(a) * force;
+          e.kbvy = (e.kbvy || 0) + Math.sin(a) * force;
+          e.stun = Math.max(e.stun, 0.3);
+          e.kbImmune = 1.5; // 同一敌人被击退后 1.5s 内免疫再次击退
+          for (const o of enemies) {
+            if (o === e) continue;
+            // 与被命中怪碰撞箱重叠：获得相同击退速度，像被一起拖走（同样获得 1.5s 击退免疫）
+            const d = Math.hypot(o.x - e.x, o.y - e.y);
+            if (d < e.r + o.r + 6 && !(o.kbImmune > 0)) {
+              o.kbvx = (o.kbvx || 0) + Math.cos(a) * force;
+              o.kbvy = (o.kbvy || 0) + Math.sin(a) * force;
+              o.kbImmune = 1.5;
+            }
+          }
+          fx.push({ x: e.x, y: e.y, r: 6, vr: 160, life: 0.18, color: "#e8eef6" });
+        }
       }
       fx.push({ x: e.x, y: e.y, r: 4, vr: 40, life: 0.12, color: "#fff" });
       return true;
@@ -840,6 +921,22 @@
           e.poison -= dt;
           e.hp -= e.poisonDps * dt;
         }
+        // 咒术染色随时间消退
+        if (e.castTint) {
+          e.castTint.life -= dt;
+          if (e.castTint.life <= 0) e.castTint = null;
+        }
+        // 击退拖拽：按击退速度位移并缓慢衰减（形成持续拉退动效）
+        if (e.kbvx || e.kbvy) {
+          e.x += e.kbvx * dt;
+          e.y += e.kbvy * dt;
+          const decay = Math.exp(-3 * dt);
+          e.kbvx *= decay;
+          e.kbvy *= decay;
+          if (Math.abs(e.kbvx) < 10 && Math.abs(e.kbvy) < 10) { e.kbvx = 0; e.kbvy = 0; }
+        }
+        // 击退免疫计时
+        if (e.kbImmune > 0) e.kbImmune -= dt;
         if (e.hp <= 0) {
           killEnemy(e);
           continue;
@@ -848,11 +945,109 @@
           e.stun -= dt;
           continue;
         }
-        const a = Math.atan2(player.y - e.y, player.x - e.x);
+        // 预判堵路：瞄准玩家 0.35 秒后的位置
+        const aimX = player.x + (player.vx || 0) * 0.35;
+        const aimY = player.y + (player.vy || 0) * 0.35;
+        const a = Math.atan2(aimY - e.y, aimX - e.x);
+        const dPlayer = Math.hypot(player.x - e.x, player.y - e.y);
         const slowMul = e.slow > 0 ? 0.7 : 1;
         if (e.slow > 0) e.slow -= dt;
-        e.x += Math.cos(a) * e.speed * slowMul * dt;
-        e.y += Math.sin(a) * e.speed * slowMul * dt;
+
+        // 冲刺怪：cd 就绪且距离 >80px 时向玩家突进，期间推开周围怪物
+        if (e.dash) {
+          e.dash.cd -= dt;
+          if (e.dashing) {
+            e.dashTime -= dt;
+            e.x += Math.cos(e.dashAng) * e.speed * 4.5 * dt;
+            e.y += Math.sin(e.dashAng) * e.speed * 4.5 * dt;
+            for (const o of enemies) {
+              if (o === e) continue;
+              const dd = Math.hypot(o.x - e.x, o.y - e.y);
+              if (dd < (e.hitR || e.r) + (o.hitR || o.r) + 26) {
+                const pa = Math.atan2(o.y - e.y, o.x - e.x);
+                o.x += Math.cos(pa) * 18;
+                o.y += Math.sin(pa) * 18;
+              }
+            }
+            if (e.dashTime <= 0) {
+              e.dashing = false;
+              e.dash.cd = 3.5;
+            }
+          } else if (e.dash.cd <= 0 && dPlayer > 80) {
+            e.dashing = true;
+            e.dashTime = 0.18;
+            e.dashAng = Math.atan2(player.y - e.y, player.x - e.x);
+          }
+        }
+
+        if (!e.dashing) {
+          if (e.ranged && dPlayer > 180) {
+            // 远程怪：停止前进，绕玩家横向微移（±60°）
+            const sa = a + (Math.PI / 2 + (Math.random() - 0.5) * (Math.PI / 3)) * e.strafeDir;
+            e.x += Math.cos(sa) * e.speed * 0.5 * slowMul * dt;
+            e.y += Math.sin(sa) * e.speed * 0.5 * slowMul * dt;
+          } else if (e.flank) {
+            // 包抄：先奔向玩家前方 90px 处的堵截点，贴近后才直追
+            const tx = player.x + (player.vx || 0) * 0.4;
+            const ty = player.y + (player.vy || 0) * 0.4;
+            const dTarget = Math.hypot(tx - e.x, ty - e.y);
+            const ma = dTarget > 40 && dPlayer > 60 ? Math.atan2(ty - e.y, tx - e.x) : a;
+            e.x += Math.cos(ma) * e.speed * slowMul * dt;
+            e.y += Math.sin(ma) * e.speed * slowMul * dt;
+          } else {
+            e.x += Math.cos(a) * e.speed * slowMul * dt;
+            e.y += Math.sin(a) * e.speed * slowMul * dt;
+          }
+        }
+
+        // 远程怪放弹
+        if (e.ranged) {
+          e.shootCd -= dt;
+          if (e.shootCd <= 0 && dPlayer < 300) {
+            const sa = Math.atan2(player.y - e.y, player.x - e.x);
+            eshots.push({
+              x: e.x, y: e.y,
+              vx: Math.cos(sa) * 260,
+              vy: Math.sin(sa) * 260,
+              r: 4,
+              dmg: 6 + wave,
+              life: 1.5
+            });
+            e.shootCd = 1.8;
+          }
+        }
+
+        // 咒术怪：每5秒给玩家上随机 debuff（力度为玩家技能的一半以下）
+        if (e.caster) {
+          e.castCd -= dt;
+          if (e.castCd <= 0 && dPlayer < 220) {
+            // 不同咒术附带与属性相同的颜色
+            const CASTS = [
+              { key: "burn", color: "#ff7a3d" },
+              { key: "slow", color: "#7fd7ff" },
+              { key: "poison", color: "#86d65b" },
+              { key: "stun", color: "#f4e15a" }
+            ];
+            const cast = CASTS[Math.floor(Math.random() * CASTS.length)];
+            // 施法即染色（怪物染属性色，平时为橙色）
+            e.castTint = { color: cast.color, life: 5 };
+            // 玩家在咒术 buff 后 5s 内免疫同种咒术
+            if (!player.castImmune) player.castImmune = { burn: 0, slow: 0, poison: 0, stun: 0 };
+            if (player.castImmune[cast.key] > 0) {
+              fx.push({ x: player.x, y: player.y - player.r - 10, r: 4, vr: 0, life: 0.5, color: "#8fa3bb", text: "抵抗" });
+            } else {
+              if (cast.key === "burn") { player.burn = 2; player.burnDps = 3; }
+              else if (cast.key === "slow") player.slow = 2;
+              else if (cast.key === "poison") { player.poison = 3; player.poisonDps = 2; }
+              else player.stun = Math.max(player.stun, 0.4);
+              player.castImmune[cast.key] = 5;
+              // 敌人身上浮现对应属性的施法图标，同时玩家头顶同色提示
+              fx.push({ x: e.x, y: e.y - e.r - 8, r: 4, vr: 0, life: 0.7, color: cast.color, text: "✦", size: 16 });
+              fx.push({ x: player.x, y: player.y - player.r - 10, r: 4, vr: 0, life: 0.6, color: cast.color, text: "咒术" });
+            }
+            e.castCd = 5;
+          }
+        }
 
         if (player.hurt <= 0 && Math.hypot(e.x - player.x, e.y - player.y) < (e.hitR || e.r) + player.r - 2) {
           const taken = e.dmg * (1 - (player.dr || 0));
@@ -885,8 +1080,8 @@
     }
 
     function updateOrbs(dt) {
-      const magnetR = 110;
-      const pickR = 16;
+      const magnetR = 160;
+      const pickR = 26; // 玩家身边小范围内直接拾取
       for (let i = orbs.length - 1; i >= 0; i--) {
         const o = orbs[i];
         o.bob += dt * 6;
@@ -895,18 +1090,18 @@
         if (d < magnetR) o.magnet = true;
         if (o.magnet) {
           const a = Math.atan2(player.y - o.y, player.x - o.x);
-          const pull = 240 + (magnetR - Math.min(d, magnetR)) * 8;
+          const pull = 520 + (magnetR - Math.min(d, magnetR)) * 10;
           o.vx += Math.cos(a) * pull * dt;
           o.vy += Math.sin(a) * pull * dt;
-          o.vx *= 0.9;
-          o.vy *= 0.9;
+          o.vx *= 0.94;
+          o.vy *= 0.94;
         } else {
           o.vx *= 0.92;
           o.vy *= 0.92;
         }
         o.x += o.vx * dt;
         o.y += o.vy * dt;
-        if (d < pickR || o.magnet && d < 20) {
+        if (d < pickR || o.magnet && d < 26) {
           gainXp(o.value);
           fx.push({ x: o.x, y: o.y, r: o.r, vr: 30, life: 0.2, color: "#54fb54", toPlayer: true });
           orbs.splice(i, 1);
@@ -946,27 +1141,55 @@
     }
 
     function updatePlayer(dt) {
+      // 咒术 debuff 结算
+      if (player.burn > 0) { player.burn -= dt; player.hp -= player.burnDps * dt; }
+      if (player.poison > 0) { player.poison -= dt; player.hp -= player.poisonDps * dt; }
+      if (player.slow > 0) player.slow -= dt;
+      if (player.stun > 0) player.stun -= dt;
+      // 同种咒术免疫计时递减
+      if (player.castImmune) {
+        for (const k in player.castImmune) {
+          if (player.castImmune[k] > 0) player.castImmune[k] -= dt;
+        }
+      }
       let mx = 0, my = 0;
       if (keys.has("w") || keys.has("arrowup")) my -= 1;
       if (keys.has("s") || keys.has("arrowdown")) my += 1;
       if (keys.has("a") || keys.has("arrowleft")) mx -= 1;
       if (keys.has("d") || keys.has("arrowright")) mx += 1;
       if (joy.active && (joy.dx || joy.dy)) { mx += joy.dx; my += joy.dy; }
-      if (mx || my) {
+      if (player.stun <= 0 && (mx || my)) {
         const n = Math.hypot(mx, my);
-        player.x += (mx / n) * player.speed * dt;
-        player.y += (my / n) * player.speed * dt;
+        const spd = player.speed * (player.slow > 0 ? 0.6 : 1);
+        player.x += (mx / n) * spd * dt;
+        player.y += (my / n) * spd * dt;
       }
-      player.x = Math.max(player.r, Math.min(W - player.r, player.x));
-      player.y = Math.max(player.r, Math.min(H - player.r, player.y));
+      // 虚拟地图比屏幕大一圈：可走到屏幕边缘外 200px
+      player.x = Math.max(-200 + player.r, Math.min(W + 200 - player.r, player.x));
+      player.y = Math.max(-200 + player.r, Math.min(H + 200 - player.r, player.y));
       player.hurt = Math.max(0, player.hurt - dt);
       player.flash = Math.max(0, player.flash - dt);
+      // 由上一帧位移估算速度，供敌人预判堵路/包抄使用
+      player.vx = dt > 0 ? (player.x - player.px) / dt : 0;
+      player.vy = dt > 0 ? (player.y - player.py) / dt : 0;
+      player.px = player.x;
+      player.py = player.y;
     }
 
-    function addResist(tags, focus = 1) {
-      // focus = potency：玩家 prompt 命中的关键词越少，敌人针对性抗性涨得越快
+    // 遗传式抗性：不随每次输入跳升，而是依据玩家当前武器库的总词条随时间缓慢累积
+    function updateResist(dt) {
+      resistTick += dt;
+      if (resistTick < 5) return; // 每 5 秒结算一次
+      resistTick = 0;
+      const tags = new Set();
+      for (const w of weapons) for (const t of w.tags) tags.add(t);
       for (const tag of tags) {
-        resist[tag] = +((resist[tag] || 0) + focus).toFixed(2);
+        // 基础增速放缓；被玩家多次选取的词条增速加快（每选 1 次 +0.02，至多 +0.06）
+        const use = Math.min(3, tagUsage[tag] || 0);
+        const grow = 0.03 + 0.02 * use;
+        // 上限：吸血 4.17（显示 50%），其余 6.25（显示 75%）
+        const cap = tag === "吸血" ? 4.17 : 6.25;
+        resist[tag] = Math.min(cap, +((resist[tag] || 0) + grow).toFixed(2));
       }
     }
 
@@ -974,6 +1197,23 @@
       ui.waveWarn.textContent = text;
       ui.waveWarn.classList.add("show");
       setTimeout(() => ui.waveWarn.classList.remove("show"), 2200);
+    }
+
+    // 敌方子弹（远程怪）：小圆点，命中玩家扣血，1.5 秒自动销毁
+    function updateEShots(dt) {
+      for (let i = eshots.length - 1; i >= 0; i--) {
+        const p = eshots[i];
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.life -= dt;
+        if (p.life <= 0) { eshots.splice(i, 1); continue; }
+        if (player.hurt <= 0 && Math.hypot(p.x - player.x, p.y - player.y) < p.r + player.r - 2) {
+          player.hp -= p.dmg * (1 - (player.dr || 0));
+          player.hurt = 0.3;
+          player.flash = 0.18;
+          eshots.splice(i, 1);
+        }
+      }
     }
 
     function update(dt) {
@@ -984,7 +1224,8 @@
       const ws = waveStats();
       const interval = Math.max(0.35, (1.35 - time * 0.012) * ws.spawnMul);
       const cap = 45 + wave * 8;
-      while (spawnAcc >= interval && enemies.length < cap) {
+      // 3:00 后停止任何怪物生成，进入清剿阶段
+      while (spawnAcc >= interval && enemies.length < cap && time < 180) {
         spawnAcc -= interval;
         spawnEnemy();
         if (time > 40 && Math.random() < 0.25) spawnEnemy();
@@ -996,16 +1237,29 @@
         showWaveWarn(`第 ${wave} 波来袭！`);
       }
 
-      if (time >= nextBossTime) {
+      if (time >= nextBossTime && time < 180) {
         spawnEnemy({ boss: true });
         showWaveWarn("Boss 出现！");
         nextBossTime += 60;
       }
 
-      if (time >= 165) {
+      // 3:00 起：立刻删除地图范围线外的怪物（不掉经验不计数），确保清剿可完成
+      if (time >= 180 && enemies.length) {
+        const bx = -200, by = -200, bw = W + 400, bh = H + 400;
+        enemies = enemies.filter((e) => e.x >= bx && e.x <= bx + bw && e.y >= by && e.y <= by + bh);
+      }
+
+      // 3:00 后：清剿提示一次
+      if (time >= 180 && !finalPhaseWarned) {
+        finalPhaseWarned = true;
+        showWaveWarn("清剿所有怪物！");
+      }
+
+      // 通关：3:00 后不再生成，全部清缴完毕才算通过
+      if (time >= 180 && enemies.length === 0) {
         state = "over";
         player.hp = Math.max(player.hp, 1);
-        ui.overText.innerHTML = `成功撑过 2 分 45 秒！<br>击杀 ${kills} · 等级 ${player.level} · 波次 ${wave}`;
+        ui.overText.innerHTML = `通关成功！所有怪物已清缴。<br>击杀 ${kills} · 等级 ${player.level} · 波次 ${wave}`;
         ui.gameover.classList.add("show");
         return;
       }
@@ -1015,11 +1269,18 @@
       updateShots(dt);
       updateEnemies(dt);
       separateEnemies();
+      updateEShots(dt);
       updateOrbs(dt);
+      updateResist(dt);
+      // 摄像机跟随玩家，敌人越多视角越广
+      cam.x += (player.x - cam.x) * 6 * dt;
+      cam.y += (player.y - cam.y) * 6 * dt;
+      cam.s = 1 + Math.min(0.15, enemies.length * 0.003);
       for (let i = fx.length - 1; i >= 0; i--) {
         const f = fx[i];
         f.life -= dt;
         f.r += f.vr * dt;
+        if (f.text) f.y -= 30 * dt;
         if (f.toPlayer) {
           f.x += (player.x - f.x) * 10 * dt;
           f.y += (player.y - f.y) * 10 * dt;
@@ -1073,9 +1334,14 @@
       if (e.boss) { drawBoss(e); return; }
       ctx.save();
       ctx.translate(e.x, e.y);
-      ctx.fillStyle = e.stun > 0 ? "#d9c46a" : e.slow > 0 ? "#7ec7e6" : "#d06a6a";
-      ctx.strokeStyle = "#2a1111";
+      ctx.fillStyle = e.castTint ? e.castTint.color : e.stun > 0 ? "#d9c46a" : e.slow > 0 ? "#7ec7e6" : (e.color || "#d06a6a");
+      ctx.strokeStyle = e.dashing ? "#ffffff" : "#2a1111";
       ctx.lineWidth = 2;
+      // 冲刺期间给敌人描白色发光边
+      if (e.dashing) {
+        ctx.shadowColor = "rgba(255, 255, 255, 0.9)";
+        ctx.shadowBlur = 14;
+      }
       ctx.beginPath();
       if (e.shape === "sq") {
         ctx.rect(-e.r, -e.r, e.r * 2, e.r * 2);
@@ -1085,6 +1351,8 @@
         ctx.lineTo(0, e.r);
         ctx.lineTo(-e.r, 0);
         ctx.closePath();
+      } else if (e.shape === "circle") {
+        ctx.arc(0, 0, e.r, 0, Math.PI * 2);
       } else {
         ctx.moveTo(0, -e.r);
         ctx.lineTo(e.r * 0.95, e.r);
@@ -1094,6 +1362,17 @@
       ctx.fill();
       ctx.stroke();
       ctx.restore();
+      // 属性盾 / 次数盾：外围一圈对应颜色光环
+      if (e.shieldType || e.shieldHits > 0) {
+        ctx.save();
+        ctx.globalAlpha = 0.55 + 0.25 * Math.sin(time * 6);
+        ctx.strokeStyle = e.shieldType ? colorFor([e.shieldType]) : "#cfd6dd";
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, e.r + 5, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
       const ratio = Math.max(0, e.hp / e.maxHp);
       ctx.fillStyle = "#1a1a1a";
       ctx.fillRect(e.x - 10, e.y - e.r - 8, 20, 3);
@@ -1102,16 +1381,32 @@
     }
 
     function draw() {
+      // 摄像机以玩家为中心：世界坐标平移到屏幕中心
+      ctx.save();
+      ctx.translate(W / 2 - cam.x * cam.s, H / 2 - cam.y * cam.s);
+      ctx.scale(cam.s, cam.s);
+      // 地图边界：玩家可活动范围，黄色高亮显示，边界外不渲染实体
+      const bx = -200, by = -200, bw = W + 400, bh = H + 400;
+      // 边界外：更暗的底色，与地图内形成对比
+      ctx.fillStyle = "#040609";
+      ctx.fillRect(bx - 800, by - 800, bw + 1600, bh + 1600);
+      // 地图背景 + 网格
       ctx.fillStyle = "#0b1016";
-      ctx.fillRect(0, 0, W, H);
+      ctx.fillRect(bx, by, bw, bh);
       ctx.strokeStyle = "rgba(90, 120, 150, 0.08)";
       ctx.lineWidth = 1;
-      for (let x = 0; x < W; x += 48) {
-        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+      for (let x = bx; x <= bx + bw; x += 48) {
+        ctx.beginPath(); ctx.moveTo(x, by); ctx.lineTo(x, by + bh); ctx.stroke();
       }
-      for (let y = 0; y < H; y += 48) {
-        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+      for (let y = by; y <= by + bh; y += 48) {
+        ctx.beginPath(); ctx.moveTo(bx, y); ctx.lineTo(bx + bw, y); ctx.stroke();
       }
+
+      // 裁剪到地图边界内：边界外的敌人/子弹不再渲染，避免截断"拖尾"
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(bx, by, bw, bh);
+      ctx.clip();
 
       for (const o of orbs) {
         // MC 经验球风格：上下浮动 + 水平方向旋转压扁，高价值球偏黄
@@ -1147,21 +1442,18 @@
       for (const p of shots) {
         ctx.save();
         ctx.translate(p.x, p.y);
-        ctx.rotate(p.ang || Math.atan2(p.vy, p.vx));
         ctx.fillStyle = p.color;
-        if (p.arrow) {
-          ctx.beginPath();
-          ctx.moveTo(8, 0);
-          ctx.lineTo(-8, 3.2);
-          ctx.lineTo(-8, -3.2);
-          ctx.closePath();
-          ctx.fill();
-        } else {
-          ctx.beginPath();
-          ctx.arc(0, 0, p.r, 0, Math.PI * 2);
-          ctx.fill();
-        }
+        ctx.beginPath();
+        ctx.arc(0, 0, p.r, 0, Math.PI * 2);
+        ctx.fill();
         ctx.restore();
+      }
+
+      for (const p of eshots) {
+        ctx.beginPath();
+        ctx.fillStyle = "#ff6b8a";
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fill();
       }
 
       for (const w of weapons) {
@@ -1187,9 +1479,50 @@
           ctx.arc(player.x, player.y, player.r + 6, 0, Math.PI * 2);
           ctx.stroke();
         }
+        // 被咒术 debuff 时，玩家周围对应颜色闪烁
+        const debuffRings = [
+          [player.burn > 0, "#ff7a3d"],
+          [player.poison > 0, "#86d65b"],
+          [player.slow > 0, "#7fd7ff"],
+          [player.stun > 0, "#f4e15a"]
+        ];
+        let ring = 0;
+        for (const [on, color] of debuffRings) {
+          if (!on) continue;
+          ctx.beginPath();
+          ctx.globalAlpha = 0.35 + 0.35 * Math.abs(Math.sin(time * 10));
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 2;
+          ctx.arc(player.x, player.y, player.r + 10 + ring * 4, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+          ring++;
+        }
       }
 
       for (const f of fx) {
+        if (f.text) {
+          ctx.globalAlpha = Math.max(0, f.life * 2.5);
+          ctx.fillStyle = f.color;
+          ctx.font = `bold ${f.size || 12}px sans-serif`;
+          ctx.textAlign = "center";
+          ctx.fillText(f.text, f.x, f.y);
+          ctx.globalAlpha = 1;
+          continue;
+        }
+        if (f.dot) {
+          // 填充发光光点（吸血特效等）
+          ctx.save();
+          ctx.globalAlpha = Math.max(0, Math.min(1, f.life * 3));
+          ctx.shadowColor = f.color;
+          ctx.shadowBlur = 8;
+          ctx.fillStyle = f.color;
+          ctx.beginPath();
+          ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+          continue;
+        }
         ctx.beginPath();
         ctx.strokeStyle = f.color;
         ctx.globalAlpha = Math.max(0, f.life * 4);
@@ -1197,6 +1530,21 @@
         ctx.stroke();
         ctx.globalAlpha = 1;
       }
+
+      // 结束边界裁剪
+      ctx.restore();
+
+      // 黄色高亮边界线（屏幕恒定线宽，带微光）
+      ctx.save();
+      ctx.strokeStyle = "#f0d53a";
+      ctx.lineWidth = 3 / cam.s;
+      ctx.shadowColor = "rgba(240, 213, 58, 0.55)";
+      ctx.shadowBlur = 14 / cam.s;
+      ctx.strokeRect(bx, by, bw, bh);
+      ctx.restore();
+
+      // 世界渲染结束，恢复屏幕坐标（HUD 为 DOM，不受影响）
+      ctx.restore();
 
       if (player) {
         const need = xpNeed(player.level);
@@ -1208,8 +1556,9 @@
         ui.timeText.textContent = fmtTime(time);
         ui.killText.textContent = `击杀 ${kills}`;
         ui.waveText.textContent = `波次 ${wave}`;
-        const topResist = Object.entries(resist).sort((a, b) => b[1] - a[1]).slice(0, 3);
-        ui.resistText.textContent = topResist.length ? `敌人抗性：${topResist.map(([t, n]) => `${t} ${Math.min(100, Math.round(n * 12))}%`).join(" · ")}` : "";
+        // 显示玩家已选择词条的全部敌人抗性（不截断）
+        const allResist = Object.entries(resist).sort((a, b) => b[1] - a[1]);
+        ui.resistText.textContent = allResist.length ? `敌人抗性：${allResist.map(([t, n]) => `${t} ${Math.min(100, Math.round(n * 12))}%`).join(" · ")}` : "";
         ui.weaponHud.textContent = weapons.map((w) => w.name).join(" · ");
       }
     }
@@ -1243,7 +1592,6 @@
       if (s.orbit) extras.push("环绕");
       if (s.homing) extras.push("追踪");
       if (s.knockback) extras.push("击退");
-      if (s.arrow) extras.push("箭矢");
       if (s.split) extras.push(`分裂 ${s.split}`);
       if (s.bounce) extras.push(`弹射 ${s.bounce}`);
       if (s.pierce) extras.push(`穿透 ${s.pierce}`);
@@ -1252,7 +1600,7 @@
       ui.parseOut.innerHTML = `
         <p>识别到 <strong>${skill.tags.join(" + ")}</strong>，生成技能 <strong>${skill.name}</strong></p>
         <div class="skill-name">${skill.name}</div>
-        <p>${skill.desc} · 倍率 ${skill.potency.toFixed(2)}</p>
+        <p>${skill.desc} · 倍率 ${skill.potency.toFixed(2)}${skill.capped ? " · 已达 4 词条上限" : ""}</p>
         <div class="chips" style="margin:8px 0">${skill.details.map((d) => `<span class="chip hit">${d.word} → ${d.tag}</span>`).join("")}</div>
         <div class="stats">
           <div class="stat"><b>伤害</b>${s.damage}</div>
@@ -1286,8 +1634,9 @@
     ui.parseBtn.addEventListener("click", parsePrompt);
     ui.confirmBtn.addEventListener("click", () => {
       if (!pendingSkill || !pendingSkill.tags.length) return;
+      // 记录选取次数：被多次选取的词条，敌人对其抗性增速加快
+      for (const t of pendingSkill.tags) tagUsage[t] = (tagUsage[t] || 0) + 1;
       weapons.push(pendingSkill);
-      addResist(pendingSkill.tags, pendingSkill.resistFocus);
       pendingSkill = null;
       closeLevelup();
     });
