@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>Prompt Survivor</title>
   <style>
     :root {
@@ -32,6 +32,45 @@
       width: 100%;
       height: 100%;
       background: #0b1016;
+      touch-action: none;
+    }
+    body { overscroll-behavior: none; -webkit-user-select: none; user-select: none; }
+    /* 虚拟摇杆：仅触屏设备显示 */
+    #joystick {
+      position: fixed;
+      left: 22px;
+      bottom: 26px;
+      width: 116px;
+      height: 116px;
+      border-radius: 50%;
+      background: rgba(90, 209, 194, 0.08);
+      border: 2px solid rgba(90, 209, 194, 0.35);
+      z-index: 4;
+      display: none;
+      touch-action: none;
+    }
+    #joystick .knob {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: rgba(90, 209, 194, 0.5);
+      border: 2px solid var(--accent);
+      transform: translate(-50%, -50%);
+    }
+    body.touch #joystick { display: block; }
+    /* 手机屏幕适配 */
+    @media (max-width: 640px) {
+      #hud { left: 8px; right: 8px; top: 8px; }
+      .bar-wrap { max-width: 46vw; margin-bottom: 6px; }
+      .meta { font-size: 11px; line-height: 1.4; }
+      .card { padding: 14px; }
+      h1 { font-size: 22px; }
+      h2 { font-size: 17px; }
+      button { padding: 12px 14px; font-size: 16px; }
+      #waveWarn { font-size: 20px; }
     }
     #hud {
       position: fixed;
@@ -178,6 +217,7 @@
 </head>
 <body>
   <canvas id="game"></canvas>
+  <div id="joystick"><div class="knob"></div></div>
   <div id="hud">
     <div class="bar-wrap">
       <div class="bar-label"><span>生命</span><span id="hpText">100/100</span></div>
@@ -428,6 +468,58 @@
     });
     addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
 
+    // ===== 虚拟摇杆（手机） =====
+    const joy = { active: false, id: null, dx: 0, dy: 0, cx: 0, cy: 0 };
+    const joyEl = document.getElementById("joystick");
+    const joyKnob = joyEl.querySelector(".knob");
+    function setKnob(dx, dy) {
+      joyKnob.style.transform = `translate(calc(-50% + ${dx * 32}px), calc(-50% + ${dy * 32}px))`;
+    }
+    // 首次触摸屏幕即判定为触屏设备，显示摇杆
+    addEventListener("touchstart", function showJoy() {
+      document.body.classList.add("touch");
+      removeEventListener("touchstart", showJoy);
+    }, { passive: true });
+    // 阻止画布上的触摸滚动/下拉刷新（弹窗区域不受影响）
+    canvas.addEventListener("touchstart", (e) => e.preventDefault(), { passive: false });
+    canvas.addEventListener("touchmove", (e) => e.preventDefault(), { passive: false });
+    joyEl.addEventListener("touchstart", (e) => {
+      e.preventDefault();
+      const t = e.changedTouches[0];
+      joy.active = true;
+      joy.id = t.identifier;
+      const rect = joyEl.getBoundingClientRect();
+      joy.cx = rect.left + rect.width / 2;
+      joy.cy = rect.top + rect.height / 2;
+    }, { passive: false });
+    addEventListener("touchmove", (e) => {
+      if (!joy.active) return;
+      for (const t of e.changedTouches) {
+        if (t.identifier !== joy.id) continue;
+        e.preventDefault();
+        let dx = (t.clientX - joy.cx) / 40;
+        let dy = (t.clientY - joy.cy) / 40;
+        const n = Math.hypot(dx, dy);
+        if (n > 1) { dx /= n; dy /= n; }
+        joy.dx = dx;
+        joy.dy = dy;
+        setKnob(dx, dy);
+      }
+    }, { passive: false });
+    function endJoy(e) {
+      for (const t of e.changedTouches) {
+        if (t.identifier === joy.id) {
+          joy.active = false;
+          joy.id = null;
+          joy.dx = 0;
+          joy.dy = 0;
+          setKnob(0, 0);
+        }
+      }
+    }
+    addEventListener("touchend", endJoy);
+    addEventListener("touchcancel", endJoy);
+
     ui.samples.append(...SAMPLES.map((text) => {
       const btn = document.createElement("button");
       btn.type = "button";
@@ -513,9 +605,11 @@
       const hp = Math.floor(baseHp * ws.hpMul * (opts.boss ? 8 : 1));
       const r = opts.boss ? 28 : 12 + Math.random() * 4;
       const shape = opts.boss ? "boss" : ["tri", "sq", "dia"][Math.floor(Math.random() * 3)];
+      // 按形状给独立碰撞半径：方形最实，菱形/三角/Boss 星形略小，贴合视觉轮廓
+      const hitR = opts.boss ? r * 0.8 : shape === "sq" ? r : shape === "tri" ? r * 0.88 : r * 0.8;
       enemies.push({
         id: enemyId++,
-        x, y, r,
+        x, y, r, hitR,
         hp, maxHp: hp,
         speed: (opts.boss ? 42 : 58 + Math.min(70, time * 0.35) + Math.random() * 12) * ws.speedMul,
         shape,
@@ -574,7 +668,7 @@
       const radius = 36 + skill.stats.range * 0.18;
       for (const e of enemies) {
         if (ignore.has(e.id)) continue;
-        if (Math.hypot(e.x - x, e.y - y) <= radius + e.r) {
+        if (Math.hypot(e.x - x, e.y - y) <= radius + (e.hitR || e.r)) {
           applyHit(e, skill, skill.stats.damage * 0.55, ignore);
         }
       }
@@ -648,7 +742,7 @@
           if (w.cd <= 0) {
             const hitSet = new Set();
             for (const e of [...enemies]) {
-              if (Math.hypot(e.x - ox, e.y - oy) < e.r + 14) {
+              if (Math.hypot(e.x - ox, e.y - oy) < (e.hitR || e.r) + 14) {
                 applyHit(e, w, s.damage, hitSet);
                 if (w.tags.includes("爆炸")) explode(ox, oy, w, hitSet);
                 if (e.hp <= 0) killEnemy(e);
@@ -694,7 +788,7 @@
 
         for (const e of [...enemies]) {
           if (p.hit.has(e.id)) continue;
-          if (Math.hypot(e.x - p.x, e.y - p.y) > e.r + p.r) continue;
+          if (Math.hypot(e.x - p.x, e.y - p.y) > (e.hitR || e.r) + p.r) continue;
           applyHit(e, p.skill, p.dmg, p.hit);
           if (p.skill.tags.includes("爆炸")) explode(p.x, p.y, p.skill, p.hit);
           if (p.split > 0) {
@@ -760,7 +854,7 @@
         e.x += Math.cos(a) * e.speed * slowMul * dt;
         e.y += Math.sin(a) * e.speed * slowMul * dt;
 
-        if (player.hurt <= 0 && Math.hypot(e.x - player.x, e.y - player.y) < e.r + player.r - 2) {
+        if (player.hurt <= 0 && Math.hypot(e.x - player.x, e.y - player.y) < (e.hitR || e.r) + player.r - 2) {
           const taken = e.dmg * (1 - (player.dr || 0));
           player.hp -= taken;
           player.hurt = 0.55;
@@ -768,6 +862,24 @@
           const k = Math.atan2(player.y - e.y, player.x - e.x);
           player.x += Math.cos(k) * 16;
           player.y += Math.sin(k) * 16;
+        }
+      }
+    }
+
+    // 敌人碰撞箱：重叠的敌人互相推开，不再叠成一团
+    function separateEnemies() {
+      for (let i = 0; i < enemies.length; i++) {
+        for (let j = i + 1; j < enemies.length; j++) {
+          const a = enemies[i], b = enemies[j];
+          const dx = b.x - a.x, dy = b.y - a.y;
+          const rr = (a.hitR || a.r) + (b.hitR || b.r);
+          const d2 = dx * dx + dy * dy;
+          if (d2 < 0.01 || d2 >= rr * rr) continue;
+          const d = Math.sqrt(d2);
+          const push = (rr - d) * 0.5;
+          const nx = dx / d, ny = dy / d;
+          a.x -= nx * push; a.y -= ny * push;
+          b.x += nx * push; b.y += ny * push;
         }
       }
     }
@@ -839,6 +951,7 @@
       if (keys.has("s") || keys.has("arrowdown")) my += 1;
       if (keys.has("a") || keys.has("arrowleft")) mx -= 1;
       if (keys.has("d") || keys.has("arrowright")) mx += 1;
+      if (joy.active && (joy.dx || joy.dy)) { mx += joy.dx; my += joy.dy; }
       if (mx || my) {
         const n = Math.hypot(mx, my);
         player.x += (mx / n) * player.speed * dt;
@@ -901,6 +1014,7 @@
       fireWeapons(dt);
       updateShots(dt);
       updateEnemies(dt);
+      separateEnemies();
       updateOrbs(dt);
       for (let i = fx.length - 1; i >= 0; i--) {
         const f = fx[i];
