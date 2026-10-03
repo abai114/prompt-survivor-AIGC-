@@ -1,0 +1,1193 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Prompt Survivor</title>
+  <style>
+    :root {
+      --bg: #0b1016;
+      --panel: #1a2330;
+      --panel-2: #243044;
+      --line: #3a4d66;
+      --text: #e8eef6;
+      --muted: #8fa3bb;
+      --accent: #5ad1c2;
+      --warn: #f0b35a;
+      --danger: #e36b6b;
+      --ok: #7dcf7a;
+      --xp: #54fb54;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      background: #0b1016;
+    }
+    #hud {
+      position: fixed;
+      left: 16px;
+      right: 16px;
+      top: 12px;
+      pointer-events: none;
+      z-index: 2;
+    }
+    .bar-wrap { margin-bottom: 8px; max-width: 360px; }
+    .bar-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 3px;
+    }
+    .bar {
+      height: 12px;
+      background: #1c2736;
+      border: 1px solid #31455c;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .bar > i { display: block; height: 100%; width: 0; }
+    .hp > i { background: linear-gradient(90deg, #c44545, #e36b6b); }
+    .xp > i { background: linear-gradient(90deg, #2ea62e, var(--xp)); }
+    .meta {
+      position: absolute;
+      right: 0;
+      top: 0;
+      text-align: right;
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .overlay {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(6, 10, 16, 0.72);
+      z-index: 5;
+      padding: 18px;
+    }
+    .overlay.show { display: flex; }
+    .card {
+      width: min(640px, 100%);
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 20px;
+      max-height: 92vh;
+      overflow: auto;
+    }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    h2 { margin: 0 0 8px; font-size: 20px; }
+    .sub { color: var(--muted); line-height: 1.5; margin: 0 0 16px; }
+    label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+    textarea {
+      width: 100%;
+      min-height: 72px;
+      resize: vertical;
+      background: var(--panel-2);
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px;
+      font-size: 16px;
+    }
+    textarea:focus { outline: 2px solid var(--accent); border-color: transparent; }
+    .row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+    button {
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 16px;
+      font-size: 15px;
+      cursor: pointer;
+      color: #082226;
+      background: var(--accent);
+      font-weight: 700;
+    }
+    button.ghost {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--line);
+      font-weight: 600;
+    }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip {
+      background: #2c3e55;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 13px;
+    }
+    .chip.hit { background: #1e4a46; border-color: #3d8f86; color: var(--accent); }
+    .hint { font-size: 13px; color: var(--muted); line-height: 1.6; }
+    .hint button {
+      background: #2a384b;
+      color: var(--text);
+      font-weight: 500;
+      padding: 4px 8px;
+      margin: 2px 4px 2px 0;
+      font-size: 12px;
+    }
+    .skill-name { color: var(--warn); font-size: 22px; margin: 4px 0 8px; }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 8px;
+      margin: 10px 0;
+    }
+    .stat { background: var(--panel-2); border-radius: 10px; padding: 8px 10px; }
+    .stat b { display: block; color: var(--muted); font-size: 12px; }
+    .empty { color: var(--muted); }
+    .weapons { display: grid; gap: 6px; margin-top: 8px; }
+    .weapon {
+      background: var(--panel-2);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 13px;
+    }
+    .ok { color: var(--ok); }
+    .bad { color: var(--danger); }
+    #waveWarn {
+      position: fixed;
+      left: 50%;
+      top: 24%;
+      transform: translateX(-50%);
+      font-size: 26px;
+      font-weight: 800;
+      color: var(--warn);
+      text-shadow: 0 0 12px rgba(240, 179, 90, 0.5);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s;
+      z-index: 3;
+    }
+    #waveWarn.show { opacity: 1; }
+  </style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <div id="hud">
+    <div class="bar-wrap">
+      <div class="bar-label"><span>生命</span><span id="hpText">100/100</span></div>
+      <div class="bar hp"><i id="hpFill"></i></div>
+    </div>
+    <div class="bar-wrap">
+      <div class="bar-label"><span id="lvText">Lv.1</span><span id="xpText">0/8</span></div>
+      <div class="bar xp"><i id="xpFill"></i></div>
+    </div>
+    <div class="meta">
+      <div id="waveText">波次 1</div>
+      <div id="timeText">0:00</div>
+      <div id="killText">击杀 0</div>
+      <div id="resistText"></div>
+      <div id="weaponHud">魔力弹</div>
+    </div>
+  </div>
+  <div id="waveWarn"></div>
+
+  <div class="overlay show" id="menu">
+    <div class="card">
+      <h1>Prompt Survivor</h1>
+      <p class="sub">WASD 移动。自动攻击最近敌人。击杀掉绿色经验球，升级后输入中文 prompt 生成新武器。<br>撑过 2–3 分钟，迎接 Boss 波次。</p>
+      <button id="startBtn" type="button">开始</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="levelup">
+    <div class="card">
+      <h2>升级！输入 prompt 生成武器</h2>
+      <p class="sub">武器可共存。关键词越少，该词条效果越强；敌人也会针对你常用的词条获得抗性。</p>
+      <label for="prompt">中文 prompt</label>
+      <textarea id="prompt" placeholder="例如：放出一圈燃烧的爆炸火焰"></textarea>
+      <div class="row">
+        <button id="parseBtn" type="button">解析关键词</button>
+        <button id="confirmBtn" class="ghost" type="button" disabled>确认生成并继续</button>
+        <button id="skipBtn" class="ghost" type="button">跳过</button>
+      </div>
+      <p class="hint" id="samples">试一试：</p>
+      <div id="parseOut" class="empty">尚未解析。</div>
+      <div id="weaponList" class="empty"></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="gameover">
+    <div class="card">
+      <h2>结算</h2>
+      <p class="sub" id="overText"></p>
+      <button id="restartBtn" type="button">重开</button>
+    </div>
+  </div>
+
+  <script>
+    const CANONICAL = ["火", "冰", "电", "毒", "爆炸", "环", "追踪", "击退", "分裂", "穿透", "吸血", "护盾", "箭矢", "弹射"];
+    const SYNONYMS = {
+      火: ["火焰", "燃烧", "岩浆", "火"],
+      冰: ["冰冻", "寒霜", "冰霜", "雪", "冰"],
+      电: ["闪电", "雷电", "雷霆", "电击", "雷", "电"],
+      毒: ["中毒", "剧毒", "毒液", "毒素", "毒"],
+      爆炸: ["爆炸", "爆破", "爆裂", "炸裂", "轰爆"],
+      环: ["环绕", "光环", "新星", "圈", "环"],
+      追踪: ["追踪", "跟踪", "索敌", "寻敌", "锁定"],
+      击退: ["击退", "击飞", "推开", "冲击"],
+      分裂: ["分裂", "散射", "分叉", "裂弹"],
+      穿透: ["穿透", "贯穿", "穿甲"],
+      吸血: ["吸血", "汲血", "生命偷取", "汲取"],
+      护盾: ["护盾", "护甲", "屏障", "盾"],
+      箭矢: ["箭矢", "弓箭", "飞矢", "羽箭", "箭"],
+      弹射: ["弹射", "反弹", "弹跳"]
+    };
+    const NAMED_RECIPES = [
+      { tags: ["火", "爆炸", "环"], name: "火焰新星", desc: "AOE 灼烧" },
+      { tags: ["电", "追踪"], name: "闪电追踪弹", desc: "连锁麻痹" },
+      { tags: ["冰", "穿透"], name: "冰霜穿透箭", desc: "减速穿透" },
+      { tags: ["毒", "分裂"], name: "毒液分裂弹", desc: "持续伤害" },
+      { tags: ["火", "追踪"], name: "火焰追踪弹", desc: "灼烧" },
+      { tags: ["冰", "环"], name: "冰霜新星", desc: "减速 AOE" },
+      { tags: ["冰", "箭矢"], name: "冰霜箭", desc: "直线减速箭" },
+      { tags: ["电", "弹射"], name: "闪电弹射球", desc: "弹跳麻痹" },
+      { tags: ["箭矢", "弹射"], name: "弹射箭", desc: "命中后弹跳" },
+      { tags: ["箭矢", "追踪"], name: "追踪箭", desc: "自动索敌箭矢" },
+      { tags: ["毒", "箭矢"], name: "毒箭", desc: "持续伤害箭矢" }
+    ];
+    const SAMPLES = [
+      "放出一圈燃烧的爆炸火焰",
+      "召唤会追踪的闪电",
+      "射出贯穿一切的寒霜箭",
+      "喷出能够分裂的剧毒弹",
+      "让火球自动锁定敌人",
+      "在身边展开冰霜光环",
+      "射出能弹射的冰霜箭矢"
+    ];
+    const BASE = { damage: 10, cooldown: 1, range: 100 };
+
+    function matchKeywords(text) {
+      const hits = [];
+      const details = [];
+      for (const tag of CANONICAL) {
+        const words = [...SYNONYMS[tag]].sort((a, b) => b.length - a.length);
+        const found = words.find((word) => text.includes(word));
+        if (found) {
+          hits.push(tag);
+          details.push({ tag, word: found });
+        }
+      }
+      return { hits, details };
+    }
+    function potencyFromCount(count) {
+      if (count <= 0) return 0;
+      if (count === 1) return 2;
+      if (count === 2) return 1.4;
+      if (count === 3) return 1;
+      return Math.max(0.55, 1.6 / count);
+    }
+    function findNamedRecipe(tags) {
+      const set = new Set(tags);
+      return NAMED_RECIPES.find((recipe) => recipe.tags.every((t) => set.has(t))) || null;
+    }
+    function genericSkillName(tags) {
+      if (!tags.length) return "未生成";
+      const form = tags.includes("环")
+        ? "环"
+        : tags.includes("箭矢")
+          ? (tags.includes("追踪") ? "追踪箭" : "箭")
+          : tags.includes("追踪") ? "追踪弹" : "弹";
+      const elements = tags.filter((t) => ["火", "冰", "电", "毒"].includes(t));
+      const head = elements.length ? elements.join("") : tags[0];
+      return `通用技能 · ${head}${form}`;
+    }
+    function buildSkill(text) {
+      const { hits, details } = matchKeywords(text);
+      const recipe = findNamedRecipe(hits);
+      const potency = potencyFromCount(hits.length);
+      const name = recipe ? recipe.name : genericSkillName(hits);
+      const desc = recipe ? recipe.desc : hits.length ? "按标签叠加数值" : "没有匹配到预定关键词";
+      const rangeMul = hits.includes("爆炸") ? 1.5 : 1;
+      const arrowMul = hits.includes("箭矢") ? 1.2 : 1;
+      const arrowRange = hits.includes("箭矢") ? 1.3 : 1;
+      return {
+        prompt: text,
+        tags: hits,
+        details,
+        name,
+        desc,
+        potency,
+        resistFocus: potency,
+        cd: 0,
+        orbitAngle: Math.random() * Math.PI * 2,
+        stats: {
+          damage: +(BASE.damage * potency * arrowMul).toFixed(1),
+          cooldown: +Math.max(0.35, BASE.cooldown / Math.sqrt(potency)).toFixed(2),
+          range: Math.round(BASE.range * rangeMul * arrowRange * (hits.includes("环") ? 1.2 : 1)),
+          burnDps: hits.includes("火") ? +(2 * potency).toFixed(2) : 0,
+          poisonDps: hits.includes("毒") ? +(1 * potency).toFixed(2) : 0,
+          slow: hits.includes("冰") ? Math.min(70, +(30 * potency).toFixed(1)) : 0,
+          stun: hits.includes("电") ? +(0.5 * potency).toFixed(2) : 0,
+          lifesteal: hits.includes("吸血") ? Math.min(60, +(20 * potency).toFixed(1)) : 0,
+          shield: hits.includes("护盾") ? Math.min(50, +(20 * potency).toFixed(1)) : 0,
+          pierce: hits.includes("穿透") ? Math.max(1, Math.round(3 * potency)) : 0,
+          split: hits.includes("分裂") ? Math.max(2, Math.round(2 * potency)) : 0,
+          bounce: hits.includes("弹射") ? Math.max(2, Math.round(2 * potency)) : 0,
+          arrow: hits.includes("箭矢"),
+          orbit: hits.includes("环"),
+          homing: hits.includes("追踪"),
+          knockback: hits.includes("击退")
+        }
+      };
+    }
+    function starterWeapon() {
+      return {
+        name: "魔力弹",
+        tags: [],
+        details: [],
+        desc: "基础自动攻击",
+        potency: 1,
+        cd: 0,
+        orbitAngle: 0,
+        stats: {
+          damage: 10, cooldown: 0.55, range: 180,
+          burnDps: 0, poisonDps: 0, slow: 0, stun: 0,
+          lifesteal: 0, shield: 0, pierce: 0, split: 0, bounce: 0,
+          arrow: false, orbit: false, homing: false, knockback: false
+        }
+      };
+    }
+
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
+    const keys = new Set();
+    const ui = {
+      hpFill: document.getElementById("hpFill"),
+      hpText: document.getElementById("hpText"),
+      xpFill: document.getElementById("xpFill"),
+      xpText: document.getElementById("xpText"),
+      lvText: document.getElementById("lvText"),
+      timeText: document.getElementById("timeText"),
+      killText: document.getElementById("killText"),
+      waveText: document.getElementById("waveText"),
+      waveWarn: document.getElementById("waveWarn"),
+      resistText: document.getElementById("resistText"),
+      weaponHud: document.getElementById("weaponHud"),
+      menu: document.getElementById("menu"),
+      levelup: document.getElementById("levelup"),
+      gameover: document.getElementById("gameover"),
+      overText: document.getElementById("overText"),
+      prompt: document.getElementById("prompt"),
+      parseOut: document.getElementById("parseOut"),
+      weaponList: document.getElementById("weaponList"),
+      parseBtn: document.getElementById("parseBtn"),
+      confirmBtn: document.getElementById("confirmBtn"),
+      skipBtn: document.getElementById("skipBtn"),
+      samples: document.getElementById("samples")
+    };
+
+    let W = innerWidth;
+    let H = innerHeight;
+    let dpr = 1;
+    let state = "menu";
+    let pendingSkill = null;
+    let weapons = [];
+    let player = null, enemies = [], shots = [], orbs = [], fx = [];
+    let spawnAcc = 0;
+    let time = 0;
+    let kills = 0;
+    let last = 0;
+    let pendingLevels = 0;
+    let enemyId = 1;
+    let shotId = 1;
+    let wave = 1;
+    let waveTimer = 0;
+    let nextBossTime = 75;
+    let resist = {};
+
+    function resize() {
+      dpr = Math.min(devicePixelRatio || 1, 2);
+      W = innerWidth;
+      H = innerHeight;
+      canvas.width = Math.floor(W * dpr);
+      canvas.height = Math.floor(H * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    addEventListener("resize", resize);
+    resize();
+
+    addEventListener("keydown", (e) => {
+      keys.add(e.key.toLowerCase());
+      if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(e.key.toLowerCase())) e.preventDefault();
+    });
+    addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
+
+    ui.samples.append(...SAMPLES.map((text) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = text;
+      btn.addEventListener("click", () => {
+        ui.prompt.value = text;
+        parsePrompt();
+      });
+      return btn;
+    }));
+
+    function xpNeed(level) {
+      return 6 + (level - 1) * 5;
+    }
+    function dist(a, b) {
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    }
+    function nearestEnemy(from, ignore) {
+      let best = null;
+      let bestD = Infinity;
+      for (const e of enemies) {
+        if (ignore && ignore.has(e.id)) continue;
+        const d = dist(from, e);
+        if (d < bestD) {
+          bestD = d;
+          best = e;
+        }
+      }
+      return best;
+    }
+    function colorFor(tags) {
+      if (tags.includes("火")) return "#ff7a3d";
+      if (tags.includes("冰")) return "#7fd7ff";
+      if (tags.includes("电")) return "#f4e15a";
+      if (tags.includes("毒")) return "#86d65b";
+      return "#9ad7ff";
+    }
+
+    function resetRun() {
+      weapons = [starterWeapon()];
+      player = {
+        x: W / 2, y: H / 2, r: 14, speed: 230,
+        hp: 100, maxHp: 100, xp: 0, level: 1,
+        hurt: 0, flash: 0
+      };
+      enemies = [];
+      shots = [];
+      orbs = [];
+      fx = [];
+      spawnAcc = 0;
+      time = 0;
+      kills = 0;
+      pendingLevels = 0;
+      pendingSkill = null;
+      enemyId = 1;
+      shotId = 1;
+      wave = 1;
+      waveTimer = 0;
+      nextBossTime = 75;
+      resist = {};
+    }
+
+    function waveStats() {
+      const w = wave;
+      return {
+        hpMul: 1 + (w - 1) * 0.25,
+        speedMul: 1 + (w - 1) * 0.1,
+        spawnMul: Math.max(0.6, 1 - (w - 1) * 0.08),
+        dmgMul: 1 + (w - 1) * 0.12
+      };
+    }
+
+    function spawnEnemy(opts = {}) {
+      const pad = 28;
+      const side = Math.floor(Math.random() * 4);
+      let x = 0, y = 0;
+      if (side === 0) { x = Math.random() * W; y = -pad; }
+      if (side === 1) { x = Math.random() * W; y = H + pad; }
+      if (side === 2) { x = -pad; y = Math.random() * H; }
+      if (side === 3) { x = W + pad; y = Math.random() * H; }
+      const ws = waveStats();
+      const baseHp = opts.boss ? 260 : 18 + Math.floor(time / 12) * 6;
+      const hp = Math.floor(baseHp * ws.hpMul * (opts.boss ? 8 : 1));
+      const r = opts.boss ? 28 : 12 + Math.random() * 4;
+      const shape = opts.boss ? "boss" : ["tri", "sq", "dia"][Math.floor(Math.random() * 3)];
+      enemies.push({
+        id: enemyId++,
+        x, y, r,
+        hp, maxHp: hp,
+        speed: (opts.boss ? 42 : 58 + Math.min(70, time * 0.35) + Math.random() * 12) * ws.speedMul,
+        shape,
+        dmg: (opts.boss ? 22 : 8) * ws.dmgMul,
+        boss: !!opts.boss,
+        stun: 0, slow: 0,
+        burn: 0, burnDps: 0,
+        poison: 0, poisonDps: 0,
+        hitBy: new Set()
+      });
+    }
+
+    function spawnOrbs(x, y, n, value = 1) {
+      for (let i = 0; i < n; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const sp = 70 + Math.random() * 90;
+        orbs.push({
+          x, y,
+          vx: Math.cos(a) * sp,
+          vy: Math.sin(a) * sp,
+          value,
+          r: 3.2 + Math.random() * 1.4 + (value > 1 ? 1.6 : 0),
+          bob: Math.random() * Math.PI * 2,
+          magnet: false,
+          life: 22
+        });
+      }
+    }
+
+    function addShot(skill, x, y, ang, extra = {}) {
+      const s = skill.stats;
+      const spd = s.arrow ? 460 : s.homing ? 280 : 320;
+      shots.push({
+        id: shotId++,
+        skill,
+        x, y,
+        vx: Math.cos(ang) * spd,
+        vy: Math.sin(ang) * spd,
+        ang,
+        r: s.arrow ? 4 : 5.5,
+        range: s.range + (extra.range || 0),
+        traveled: 0,
+        dmg: extra.dmg || s.damage,
+        pierce: extra.pierce ?? s.pierce,
+        bounce: extra.bounce ?? s.bounce,
+        split: extra.split ?? s.split,
+        homing: s.homing,
+        arrow: s.arrow,
+        color: colorFor(skill.tags),
+        hit: extra.hit || new Set(),
+        life: 1.8
+      });
+    }
+
+    function explode(x, y, skill, ignore) {
+      const radius = 36 + skill.stats.range * 0.18;
+      for (const e of enemies) {
+        if (ignore.has(e.id)) continue;
+        if (Math.hypot(e.x - x, e.y - y) <= radius + e.r) {
+          applyHit(e, skill, skill.stats.damage * 0.55, ignore);
+        }
+      }
+      fx.push({ x, y, r: 8, vr: 140, life: 0.22, color: colorFor(skill.tags) });
+    }
+
+    function damageMultiplier(skill, e) {
+      let mul = 1;
+      const tags = skill.tags;
+      if (!tags.length) return mul;
+      let totalResist = 0;
+      let counted = 0;
+      for (const tag of tags) {
+        const r = resist[tag] || 0;
+        if (r > 0) { totalResist += r; counted++; }
+      }
+      if (counted) {
+        const avg = totalResist / counted;
+        mul *= Math.max(0.35, 1 - avg * 0.6);
+      }
+      if (e.boss) mul *= 0.65;
+      return mul;
+    }
+
+    function applyHit(e, skill, dmg, already) {
+      if (already.has(e.id)) return false;
+      already.add(e.id);
+      const s = skill.stats;
+      const realDmg = dmg * damageMultiplier(skill, e);
+      e.hp -= realDmg;
+      if (s.lifesteal) player.hp = Math.min(player.maxHp, player.hp + realDmg * s.lifesteal / 100);
+      if (s.slow) e.slow = Math.max(e.slow, 2);
+      if (s.stun) e.stun = Math.max(e.stun, s.stun);
+      if (s.burnDps) { e.burn = 3; e.burnDps = s.burnDps; }
+      if (s.poisonDps) { e.poison = 5; e.poisonDps = s.poisonDps; }
+      if (s.knockback) {
+        const a = Math.atan2(e.y - player.y, e.x - player.x);
+        e.x += Math.cos(a) * 28;
+        e.y += Math.sin(a) * 28;
+      }
+      fx.push({ x: e.x, y: e.y, r: 4, vr: 40, life: 0.12, color: "#fff" });
+      return true;
+    }
+
+    function killEnemy(e) {
+      const i = enemies.indexOf(e);
+      if (i >= 0) enemies.splice(i, 1);
+      kills += 1;
+      if (e.boss) {
+        spawnOrbs(e.x, e.y, 18, 3);
+        fx.push({ x: e.x, y: e.y, r: 16, vr: 260, life: 0.45, color: "#f0b35a" });
+      } else {
+        spawnOrbs(e.x, e.y, 2 + (Math.random() < 0.35 ? 1 : 0), 1);
+      }
+    }
+
+    function fireWeapons(dt) {
+      const target = nearestEnemy(player);
+      const shield = Math.max(0, ...weapons.map((w) => w.stats.shield || 0));
+      player.dr = shield / 100;
+
+      for (const w of weapons) {
+        w.cd = Math.max(0, w.cd - dt);
+        const s = w.stats;
+        if (s.orbit) {
+          w.orbitAngle += dt * 2.4 * w.potency;
+          const rad = Math.max(48, s.range * 0.55);
+          const ox = player.x + Math.cos(w.orbitAngle) * rad;
+          const oy = player.y + Math.sin(w.orbitAngle) * rad;
+          w.orb = { x: ox, y: oy, r: 10, color: colorFor(w.tags) };
+          if (w.cd <= 0) {
+            const hitSet = new Set();
+            for (const e of [...enemies]) {
+              if (Math.hypot(e.x - ox, e.y - oy) < e.r + 14) {
+                applyHit(e, w, s.damage, hitSet);
+                if (w.tags.includes("爆炸")) explode(ox, oy, w, hitSet);
+                if (e.hp <= 0) killEnemy(e);
+              }
+            }
+            if (hitSet.size) w.cd = s.cooldown * 0.45;
+          }
+          continue;
+        }
+        if (w.cd > 0 || !target) continue;
+        if (dist(player, target) > s.range + 40) continue;
+        const ang = Math.atan2(target.y - player.y, target.x - player.x);
+        addShot(w, player.x, player.y, ang);
+        w.cd = s.cooldown;
+      }
+    }
+
+    function updateShots(dt) {
+      for (let i = shots.length - 1; i >= 0; i--) {
+        const p = shots[i];
+        if (p.homing) {
+          const t = nearestEnemy(p, p.hit);
+          if (t) {
+            const want = Math.atan2(t.y - p.y, t.x - p.x);
+            const spd = Math.hypot(p.vx, p.vy);
+            const cur = Math.atan2(p.vy, p.vx);
+            let diff = want - cur;
+            while (diff > Math.PI) diff -= Math.PI * 2;
+            while (diff < -Math.PI) diff += Math.PI * 2;
+            const turn = Math.max(-8 * dt, Math.min(8 * dt, diff));
+            const n = cur + turn;
+            p.vx = Math.cos(n) * spd;
+            p.vy = Math.sin(n) * spd;
+            p.ang = n;
+          }
+        }
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        const step = Math.hypot(p.vx, p.vy) * dt;
+        p.traveled += step;
+        p.life -= dt;
+        let dead = p.traveled > p.range || p.life <= 0;
+
+        for (const e of [...enemies]) {
+          if (p.hit.has(e.id)) continue;
+          if (Math.hypot(e.x - p.x, e.y - p.y) > e.r + p.r) continue;
+          applyHit(e, p.skill, p.dmg, p.hit);
+          if (p.skill.tags.includes("爆炸")) explode(p.x, p.y, p.skill, p.hit);
+          if (p.split > 0) {
+            const base = Math.atan2(p.vy, p.vx);
+            for (let k = 0; k < Math.min(p.split, 4); k++) {
+              const a = base + (k % 2 === 0 ? 0.7 : -0.7) * (1 + Math.floor(k / 2) * 0.4);
+              addShot(p.skill, p.x, p.y, a, {
+                dmg: p.dmg * 0.55,
+                pierce: 0,
+                bounce: 0,
+                split: 0,
+                hit: new Set(p.hit),
+                range: p.range * 0.45
+              });
+            }
+            p.split = 0;
+          }
+          if (p.bounce > 0) {
+            p.bounce -= 1;
+            const next = nearestEnemy(p, p.hit);
+            if (next) {
+              const a = Math.atan2(next.y - p.y, next.x - p.x);
+              const spd = Math.hypot(p.vx, p.vy);
+              p.vx = Math.cos(a) * spd;
+              p.vy = Math.sin(a) * spd;
+              p.ang = a;
+              p.traveled = 0;
+            } else dead = true;
+          } else if (p.pierce > 0) {
+            p.pierce -= 1;
+          } else {
+            dead = true;
+          }
+          if (e.hp <= 0) killEnemy(e);
+          if (dead) break;
+        }
+        if (dead) shots.splice(i, 1);
+      }
+    }
+
+    function updateEnemies(dt) {
+      for (let i = enemies.length - 1; i >= 0; i--) {
+        const e = enemies[i];
+        if (e.burn > 0) {
+          e.burn -= dt;
+          e.hp -= e.burnDps * dt;
+        }
+        if (e.poison > 0) {
+          e.poison -= dt;
+          e.hp -= e.poisonDps * dt;
+        }
+        if (e.hp <= 0) {
+          killEnemy(e);
+          continue;
+        }
+        if (e.stun > 0) {
+          e.stun -= dt;
+          continue;
+        }
+        const a = Math.atan2(player.y - e.y, player.x - e.x);
+        const slowMul = e.slow > 0 ? 0.7 : 1;
+        if (e.slow > 0) e.slow -= dt;
+        e.x += Math.cos(a) * e.speed * slowMul * dt;
+        e.y += Math.sin(a) * e.speed * slowMul * dt;
+
+        if (player.hurt <= 0 && Math.hypot(e.x - player.x, e.y - player.y) < e.r + player.r - 2) {
+          const taken = e.dmg * (1 - (player.dr || 0));
+          player.hp -= taken;
+          player.hurt = 0.55;
+          player.flash = 0.18;
+          const k = Math.atan2(player.y - e.y, player.x - e.x);
+          player.x += Math.cos(k) * 16;
+          player.y += Math.sin(k) * 16;
+        }
+      }
+    }
+
+    function updateOrbs(dt) {
+      const magnetR = 110;
+      const pickR = 16;
+      for (let i = orbs.length - 1; i >= 0; i--) {
+        const o = orbs[i];
+        o.bob += dt * 6;
+        o.life -= dt;
+        const d = Math.hypot(o.x - player.x, o.y - player.y);
+        if (d < magnetR) o.magnet = true;
+        if (o.magnet) {
+          const a = Math.atan2(player.y - o.y, player.x - o.x);
+          const pull = 240 + (magnetR - Math.min(d, magnetR)) * 8;
+          o.vx += Math.cos(a) * pull * dt;
+          o.vy += Math.sin(a) * pull * dt;
+          o.vx *= 0.9;
+          o.vy *= 0.9;
+        } else {
+          o.vx *= 0.92;
+          o.vy *= 0.92;
+        }
+        o.x += o.vx * dt;
+        o.y += o.vy * dt;
+        if (d < pickR || o.magnet && d < 20) {
+          gainXp(o.value);
+          fx.push({ x: o.x, y: o.y, r: o.r, vr: 30, life: 0.2, color: "#54fb54", toPlayer: true });
+          orbs.splice(i, 1);
+          continue;
+        }
+        if (o.life <= 0) orbs.splice(i, 1);
+      }
+    }
+
+    function gainXp(n) {
+      player.xp += n;
+      while (player.xp >= xpNeed(player.level)) {
+        player.xp -= xpNeed(player.level);
+        player.level += 1;
+        pendingLevels += 1;
+      }
+      if (pendingLevels > 0 && state === "play") openLevelup();
+    }
+
+    function openLevelup() {
+      state = "levelup";
+      pendingSkill = null;
+      ui.confirmBtn.disabled = true;
+      ui.prompt.value = "";
+      ui.parseOut.className = "empty";
+      ui.parseOut.textContent = "尚未解析。";
+      renderWeapons();
+      ui.levelup.classList.add("show");
+      setTimeout(() => ui.prompt.focus(), 30);
+    }
+
+    function closeLevelup() {
+      ui.levelup.classList.remove("show");
+      pendingLevels = Math.max(0, pendingLevels - 1);
+      if (pendingLevels > 0) openLevelup();
+      else state = "play";
+    }
+
+    function updatePlayer(dt) {
+      let mx = 0, my = 0;
+      if (keys.has("w") || keys.has("arrowup")) my -= 1;
+      if (keys.has("s") || keys.has("arrowdown")) my += 1;
+      if (keys.has("a") || keys.has("arrowleft")) mx -= 1;
+      if (keys.has("d") || keys.has("arrowright")) mx += 1;
+      if (mx || my) {
+        const n = Math.hypot(mx, my);
+        player.x += (mx / n) * player.speed * dt;
+        player.y += (my / n) * player.speed * dt;
+      }
+      player.x = Math.max(player.r, Math.min(W - player.r, player.x));
+      player.y = Math.max(player.r, Math.min(H - player.r, player.y));
+      player.hurt = Math.max(0, player.hurt - dt);
+      player.flash = Math.max(0, player.flash - dt);
+    }
+
+    function addResist(tags, focus = 1) {
+      // focus = potency：玩家 prompt 命中的关键词越少，敌人针对性抗性涨得越快
+      for (const tag of tags) {
+        resist[tag] = +((resist[tag] || 0) + focus).toFixed(2);
+      }
+    }
+
+    function showWaveWarn(text) {
+      ui.waveWarn.textContent = text;
+      ui.waveWarn.classList.add("show");
+      setTimeout(() => ui.waveWarn.classList.remove("show"), 2200);
+    }
+
+    function update(dt) {
+      time += dt;
+      spawnAcc += dt;
+      waveTimer += dt;
+
+      const ws = waveStats();
+      const interval = Math.max(0.35, (1.35 - time * 0.012) * ws.spawnMul);
+      const cap = 45 + wave * 8;
+      while (spawnAcc >= interval && enemies.length < cap) {
+        spawnAcc -= interval;
+        spawnEnemy();
+        if (time > 40 && Math.random() < 0.25) spawnEnemy();
+      }
+
+      if (waveTimer >= 30) {
+        waveTimer = 0;
+        wave += 1;
+        showWaveWarn(`第 ${wave} 波来袭！`);
+      }
+
+      if (time >= nextBossTime) {
+        spawnEnemy({ boss: true });
+        showWaveWarn("Boss 出现！");
+        nextBossTime += 60;
+      }
+
+      if (time >= 165) {
+        state = "over";
+        player.hp = Math.max(player.hp, 1);
+        ui.overText.innerHTML = `成功撑过 2 分 45 秒！<br>击杀 ${kills} · 等级 ${player.level} · 波次 ${wave}`;
+        ui.gameover.classList.add("show");
+        return;
+      }
+
+      updatePlayer(dt);
+      fireWeapons(dt);
+      updateShots(dt);
+      updateEnemies(dt);
+      updateOrbs(dt);
+      for (let i = fx.length - 1; i >= 0; i--) {
+        const f = fx[i];
+        f.life -= dt;
+        f.r += f.vr * dt;
+        if (f.toPlayer) {
+          f.x += (player.x - f.x) * 10 * dt;
+          f.y += (player.y - f.y) * 10 * dt;
+        }
+        if (f.life <= 0) fx.splice(i, 1);
+      }
+      if (player.hp <= 0) {
+        player.hp = 0;
+        state = "over";
+        ui.overText.innerHTML = `存活 ${fmtTime(time)} · 击杀 ${kills} · 等级 ${player.level} · 波次 ${wave}`;
+        ui.gameover.classList.add("show");
+      }
+    }
+
+    function fmtTime(t) {
+      const s = Math.floor(t);
+      return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+    }
+
+    function drawBoss(e) {
+      ctx.save();
+      ctx.translate(e.x, e.y);
+      ctx.rotate(time * 0.6);
+      ctx.fillStyle = e.stun > 0 ? "#d9c46a" : e.slow > 0 ? "#7ec7e6" : "#c95050";
+      ctx.strokeStyle = "#4a1a1a";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      const spikes = 5;
+      const outer = e.r;
+      const inner = e.r * 0.5;
+      for (let i = 0; i < spikes * 2; i++) {
+        const a = (Math.PI * i) / spikes;
+        const r = i % 2 === 0 ? outer : inner;
+        const px = Math.cos(a) * r;
+        const py = Math.sin(a) * r;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+      const ratio = Math.max(0, e.hp / e.maxHp);
+      ctx.fillStyle = "#1a1a1a";
+      ctx.fillRect(e.x - 18, e.y - e.r - 12, 36, 4);
+      ctx.fillStyle = "#f0b35a";
+      ctx.fillRect(e.x - 18, e.y - e.r - 12, 36 * ratio, 4);
+    }
+
+    function drawShape(e) {
+      if (e.boss) { drawBoss(e); return; }
+      ctx.save();
+      ctx.translate(e.x, e.y);
+      ctx.fillStyle = e.stun > 0 ? "#d9c46a" : e.slow > 0 ? "#7ec7e6" : "#d06a6a";
+      ctx.strokeStyle = "#2a1111";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      if (e.shape === "sq") {
+        ctx.rect(-e.r, -e.r, e.r * 2, e.r * 2);
+      } else if (e.shape === "dia") {
+        ctx.moveTo(0, -e.r);
+        ctx.lineTo(e.r, 0);
+        ctx.lineTo(0, e.r);
+        ctx.lineTo(-e.r, 0);
+        ctx.closePath();
+      } else {
+        ctx.moveTo(0, -e.r);
+        ctx.lineTo(e.r * 0.95, e.r);
+        ctx.lineTo(-e.r * 0.95, e.r);
+        ctx.closePath();
+      }
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+      const ratio = Math.max(0, e.hp / e.maxHp);
+      ctx.fillStyle = "#1a1a1a";
+      ctx.fillRect(e.x - 10, e.y - e.r - 8, 20, 3);
+      ctx.fillStyle = "#7dcf7a";
+      ctx.fillRect(e.x - 10, e.y - e.r - 8, 20 * ratio, 3);
+    }
+
+    function draw() {
+      ctx.fillStyle = "#0b1016";
+      ctx.fillRect(0, 0, W, H);
+      ctx.strokeStyle = "rgba(90, 120, 150, 0.08)";
+      ctx.lineWidth = 1;
+      for (let x = 0; x < W; x += 48) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+      }
+      for (let y = 0; y < H; y += 48) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+      }
+
+      for (const o of orbs) {
+        // MC 经验球风格：上下浮动 + 水平方向旋转压扁，高价值球偏黄
+        const y = o.y + Math.sin(o.bob) * 2.4;
+        const sx = 0.3 + 0.7 * Math.abs(Math.cos(o.bob * 2));
+        const big = o.value > 1;
+        const core = big ? "#d6ff3a" : "#9dff3f";
+        const edge = big ? "#6a8f12" : "#2e7d12";
+        const glow = big ? "rgba(214,255,58,0.22)" : "rgba(125,255,63,0.2)";
+        ctx.save();
+        ctx.translate(o.x, y);
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(0, 0, o.r + 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.scale(sx, 1);
+        ctx.beginPath();
+        ctx.fillStyle = core;
+        ctx.arc(0, 0, o.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.lineWidth = 1.2;
+        ctx.strokeStyle = edge;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.fillStyle = "rgba(255,255,255,0.75)";
+        ctx.arc(-o.r * 0.28, -o.r * 0.3, o.r * 0.38, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      for (const e of enemies) drawShape(e);
+
+      for (const p of shots) {
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.ang || Math.atan2(p.vy, p.vx));
+        ctx.fillStyle = p.color;
+        if (p.arrow) {
+          ctx.beginPath();
+          ctx.moveTo(8, 0);
+          ctx.lineTo(-8, 3.2);
+          ctx.lineTo(-8, -3.2);
+          ctx.closePath();
+          ctx.fill();
+        } else {
+          ctx.beginPath();
+          ctx.arc(0, 0, p.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      for (const w of weapons) {
+        if (w.orb && w.stats.orbit) {
+          ctx.beginPath();
+          ctx.fillStyle = w.orb.color;
+          ctx.arc(w.orb.x, w.orb.y, 9, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      if (player) {
+        ctx.beginPath();
+        ctx.fillStyle = player.flash > 0 ? "#fff" : "#5ad1c2";
+        ctx.arc(player.x, player.y, player.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#0e3a36";
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        if (player.dr > 0) {
+          ctx.beginPath();
+          ctx.strokeStyle = "rgba(150, 210, 255, 0.55)";
+          ctx.arc(player.x, player.y, player.r + 6, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+
+      for (const f of fx) {
+        ctx.beginPath();
+        ctx.strokeStyle = f.color;
+        ctx.globalAlpha = Math.max(0, f.life * 4);
+        ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+
+      if (player) {
+        const need = xpNeed(player.level);
+        ui.hpFill.style.width = `${Math.max(0, player.hp / player.maxHp) * 100}%`;
+        ui.hpText.textContent = `${Math.ceil(player.hp)}/${player.maxHp}`;
+        ui.xpFill.style.width = `${Math.max(0, player.xp / need) * 100}%`;
+        ui.xpText.textContent = `${player.xp}/${need}`;
+        ui.lvText.textContent = `Lv.${player.level}`;
+        ui.timeText.textContent = fmtTime(time);
+        ui.killText.textContent = `击杀 ${kills}`;
+        ui.waveText.textContent = `波次 ${wave}`;
+        const topResist = Object.entries(resist).sort((a, b) => b[1] - a[1]).slice(0, 3);
+        ui.resistText.textContent = topResist.length ? `敌人抗性：${topResist.map(([t, n]) => `${t} ${Math.min(100, Math.round(n * 12))}%`).join(" · ")}` : "";
+        ui.weaponHud.textContent = weapons.map((w) => w.name).join(" · ");
+      }
+    }
+
+    function loop(ts) {
+      const dt = Math.min(0.033, (ts - last) / 1000 || 0);
+      last = ts;
+      try {
+        if (state === "play") update(dt);
+        draw();
+      } catch (err) {
+        // 单帧异常不应杀死整个渲染链
+        console.error("[game-loop]", err);
+      }
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+
+    function renderParse(skill) {
+      if (!skill.tags.length) {
+        ui.parseOut.innerHTML = `<p class="bad">未识别到预定关键词。</p>`;
+        ui.confirmBtn.disabled = true;
+        return;
+      }
+      const s = skill.stats;
+      const extras = [];
+      if (s.burnDps) extras.push(`灼烧 ${s.burnDps}/s`);
+      if (s.poisonDps) extras.push(`中毒 ${s.poisonDps}/s`);
+      if (s.slow) extras.push(`减速 ${s.slow}%`);
+      if (s.stun) extras.push(`麻痹 ${s.stun}s`);
+      if (s.orbit) extras.push("环绕");
+      if (s.homing) extras.push("追踪");
+      if (s.knockback) extras.push("击退");
+      if (s.arrow) extras.push("箭矢");
+      if (s.split) extras.push(`分裂 ${s.split}`);
+      if (s.bounce) extras.push(`弹射 ${s.bounce}`);
+      if (s.pierce) extras.push(`穿透 ${s.pierce}`);
+      if (s.lifesteal) extras.push(`吸血 ${s.lifesteal}%`);
+      if (s.shield) extras.push(`减伤 ${s.shield}%`);
+      ui.parseOut.innerHTML = `
+        <p>识别到 <strong>${skill.tags.join(" + ")}</strong>，生成技能 <strong>${skill.name}</strong></p>
+        <div class="skill-name">${skill.name}</div>
+        <p>${skill.desc} · 倍率 ${skill.potency.toFixed(2)}</p>
+        <div class="chips" style="margin:8px 0">${skill.details.map((d) => `<span class="chip hit">${d.word} → ${d.tag}</span>`).join("")}</div>
+        <div class="stats">
+          <div class="stat"><b>伤害</b>${s.damage}</div>
+          <div class="stat"><b>冷却</b>${s.cooldown}s</div>
+          <div class="stat"><b>范围</b>${s.range}</div>
+        </div>
+        <p class="hint">${extras.join(" · ")}</p>
+      `;
+      ui.confirmBtn.disabled = false;
+    }
+    function renderWeapons() {
+      if (!weapons.length) {
+        ui.weaponList.className = "empty";
+        ui.weaponList.textContent = "";
+        return;
+      }
+      ui.weaponList.className = "weapons";
+      ui.weaponList.innerHTML = weapons.map((w) => `<div class="weapon"><strong>${w.name}</strong> · ${w.tags.join("+") || "基础"}</div>`).join("");
+    }
+    function parsePrompt() {
+      const text = ui.prompt.value.trim();
+      if (!text) {
+        ui.parseOut.innerHTML = `<p class="bad">请先输入中文 prompt。</p>`;
+        pendingSkill = null;
+        ui.confirmBtn.disabled = true;
+        return;
+      }
+      pendingSkill = buildSkill(text);
+      renderParse(pendingSkill);
+    }
+    ui.parseBtn.addEventListener("click", parsePrompt);
+    ui.confirmBtn.addEventListener("click", () => {
+      if (!pendingSkill || !pendingSkill.tags.length) return;
+      weapons.push(pendingSkill);
+      addResist(pendingSkill.tags, pendingSkill.resistFocus);
+      pendingSkill = null;
+      closeLevelup();
+    });
+    ui.skipBtn.addEventListener("click", closeLevelup);
+
+    function startGame() {
+      resetRun();
+      ui.menu.classList.remove("show");
+      ui.gameover.classList.remove("show");
+      ui.levelup.classList.remove("show");
+      state = "play";
+    }
+    document.getElementById("startBtn").addEventListener("click", startGame);
+    document.getElementById("restartBtn").addEventListener("click", startGame);
+  </script>
+</body>
+</html>
