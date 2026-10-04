@@ -332,12 +332,12 @@ AI先是一楞，然后马上就理解了用户的意思，大笑着脱下自己
       if (count <= 0) return 0;
       return LIFESTEAL_TABLE[Math.min(count, 4) - 1];
     }
-    // 命名规范化：按 CANONICAL 优先级直接拼接内部原称 + 弹
+    // 命名规范化：按 CANONICAL 优先级直接拼接内部原称 + 弹（不加前缀，避免 HUD 中重复出现"技能"）
     function genericSkillName(tags) {
       if (!tags.length) return "未生成";
       const parts = CANONICAL.filter((t) => tags.includes(t));
       parts.push("弹");
-      return `技能 · ${parts.join("")}`;
+      return parts.join("");
     }
     function buildSkill(text) {
       const { hits, details, capped } = matchKeywords(text);
@@ -1234,7 +1234,8 @@ AI先是一楞，然后马上就理解了用户的意思，大笑着脱下自己
       if (waveTimer >= 30) {
         waveTimer = 0;
         wave += 1;
-        showWaveWarn(`第 ${wave} 波来袭！`);
+        // 3:00 后进入清剿阶段，不再显示波次信息
+        if (time < 180) showWaveWarn(`第 ${wave} 波来袭！`);
       }
 
       if (time >= nextBossTime && time < 180) {
