@@ -765,8 +765,8 @@ AI先是一楞，然后马上就理解了用户的意思，大笑着脱下自己
       if (s.burnDps) { e.burn = 3; e.burnDps = s.burnDps; }
       if (s.poisonDps) { e.poison = 5; e.poisonDps = s.poisonDps; }
       if (s.knockback) {
-        // Boss 免疫击退；普通敌人被击退后 1.5s 内免疫再次击退
-        if (e.boss || (e.kbImmune || 0) > 0) {
+        // Boss 免疫击退（不弹提示）；普通敌人被击退后 1.5s 内免疫再次击退（弹提示）
+        if (!e.boss && (e.kbImmune || 0) > 0) {
           fx.push({ x: e.x, y: e.y - e.r - 6, r: 4, vr: 0, life: 0.5, color: "#cfd6dd", text: "免疫" });
         } else {
           // 强击退：拖拽式拉退（击退速度缓慢衰减），碰撞箱重叠的敌人被一同拖走
